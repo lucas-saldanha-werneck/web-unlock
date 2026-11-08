@@ -296,6 +296,7 @@ chmod 755 "$T/ro"
 NOF="$T/nofolder"; SEEDED="$T/seededfolder"
 WEB_UNLOCK_HOME="$SEEDED" "$NODE" "$SEED"
 same=1; diffs=""
+[ -f "$SEEDED/sites.json" ] && [ -f "$SEEDED/env" ] || { same=0; diffs="seed did not write $SEEDED"; }
 for u in https://www.reddit.com/r/x https://blocked.example.com/z https://youtube.com/watch?v=1; do
   a=$(WEB_UNLOCK_HOME="$NOF" FAKE_L0_BODY="$CF" FAKE_JINA_BODY="$RTE" fetch "$u" 2>&1 | sed -e "s#$NOF#H#g" -e "s#$SK/sites.json#H/sites.json#g")
   b=$(WEB_UNLOCK_HOME="$SEEDED" FAKE_L0_BODY="$CF" FAKE_JINA_BODY="$RTE" fetch "$u" 2>&1 | sed "s#$SEEDED#H#g")
