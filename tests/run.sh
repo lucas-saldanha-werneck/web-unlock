@@ -248,6 +248,13 @@ rm -f "$SB/ps"
 # 10: install.sh seeds the folder through user-config.sh --init (which also makes references/)
 H10="$T/h10"; out=$(WEB_UNLOCK_HOME="$H10" CLAUDE_CONFIG_DIR="$T/cc10" bash "$ROOT/install.sh" 2>&1); rc=$?
 [ $rc -eq 0 ] && [ -f "$H10/sites.json" ] && [ -d "$H10/references" ] && pass "install.sh seeds through user-config.sh --init" || fail "install init" "rc=$rc $out"
+NONODE="/usr/bin:/bin"
+if env PATH="$NONODE" bash -c "command -v node" >/dev/null 2>&1; then pass "install.sh without node: skipped (node is in $NONODE)"
+else
+  H11="$T/h11"; out=$(env PATH="$NONODE" WEB_UNLOCK_HOME="$H11" CLAUDE_CONFIG_DIR="$T/cc11" bash "$ROOT/install.sh" 2>&1); rc=$?
+  [ $rc -eq 0 ] && [ -f "$T/cc11/skills/web-unlock/SKILL.md" ] && [[ "$out" == *"not created now"* ]] \
+    && pass "install.sh without node still installs the skill and says the folder waits" || fail "install no node" "rc=$rc $out"
+fi
 
 echo "== first-run seed (lib/seed.mjs, SessionStart hook) =="
 SEED="$SK/lib/seed.mjs"
@@ -295,6 +302,21 @@ else
   [ $rc -eq 0 ] && [ -z "$out" ] && [ ! -e "$T/ro/web-unlock" ] && pass "read-only parent folder -> exit 0, no output" || fail "seed readonly" "rc=$rc $out"
 fi
 chmod 755 "$T/ro"
+# WEB_UNLOCK_SITES set in the env file (not the environment) also means "no copy here", as user-config.sh reads it
+SH3="$T/seedhome3"; mkdir -p "$SH3/.config/web-unlock"
+printf '# mine\nexport WEB_UNLOCK_SITES="$HOME/shared/sites.json"\n' > "$SH3/.config/web-unlock/env"
+out=$(env -u WEB_UNLOCK_HOME -u WEB_UNLOCK_SITES HOME="$SH3" USERPROFILE="$SH3" "$NODE" "$SEED" 2>&1); rc=$?
+[ $rc -eq 0 ] && [ ! -e "$SH3/.config/web-unlock/sites.json" ] && [ -d "$SH3/.config/web-unlock/references" ] \
+  && pass "WEB_UNLOCK_SITES in the env file: the hook does not copy the registry" || fail "seed sites from env file" "rc=$rc $out $(ls -A "$SH3/.config/web-unlock")"
+# a write that fails half-way (disk full) leaves no empty file behind; the next run seeds it whole
+SH4="$T/seedhome4"; mkdir -p "$SH4"
+FAILW="data:text/javascript,import fs from 'node:fs'; fs.writeSync = () => { throw Object.assign(new Error('no space'), { code: 'ENOSPC' }); };"
+out=$(env -u WEB_UNLOCK_HOME HOME="$SH4" USERPROFILE="$SH4" "$NODE" --import "$FAILW" "$SEED" 2>&1); rc=$?
+[ $rc -eq 0 ] && [ ! -e "$SH4/.config/web-unlock/sites.json" ] && [ ! -e "$SH4/.config/web-unlock/env" ] \
+  && pass "failed write -> no empty sites.json or env left behind" || fail "seed failed write" "rc=$rc $out $(ls -A "$SH4/.config/web-unlock" 2>&1)"
+env -u WEB_UNLOCK_HOME HOME="$SH4" USERPROFILE="$SH4" "$NODE" "$SEED"
+cmp -s "$SH4/.config/web-unlock/env" "$SK/env.default" && cmp -s "$SH4/.config/web-unlock/sites.json" "$SK/sites.json" \
+  && pass "and the next run seeds both files whole" || fail "seed after failed write"
 # the seeded folder behaves exactly like no folder at all (only the registry's path in messages differs)
 NOF="$T/nofolder"; SEEDED="$T/seededfolder"
 WEB_UNLOCK_HOME="$SEEDED" "$NODE" "$SEED"
@@ -341,6 +363,14 @@ out=$(env PATH="$P" bash "$SK/bin/chrome-real.sh" bogus 2>&1); rc=$?
 [ $rc -eq 2 ] && pass "unknown subcommand -> usage, exit 2" || fail "bogus subcommand" "$out"
 out=$(cd "$T" && env PATH="$P" PLAYWRIGHT_CORE_PATH="$T/none/" "$NODE" "$SK/bin/cdp.mjs" https://a.example --port 1 2>&1); rc=$?
 { [ $rc -eq 3 ] || [ $rc -eq 4 ]; } && pass "cdp.mjs exits cleanly with no playwright or no Chrome (rc=$rc)" || fail "cdp.mjs" "$out"
+# cdp.mjs takes CHROME_REAL_PORT and PLAYWRIGHT_CORE_PATH from your env file too, like chrome-real.sh does
+mkdir -p "$T/fakepw/node_modules/playwright-core" "$T/cdpenv"
+printf 'module.exports = { chromium: { connectOverCDP() { throw new Error("not reached"); } } };\n' > "$T/fakepw/node_modules/playwright-core/index.js"
+printf 'CHROME_REAL_PORT=1\nPLAYWRIGHT_CORE_PATH="%s/"  # fake\n' "$(wp "$T/fakepw")" > "$T/cdpenv/env"
+out=$(cd "$T" && env -u CHROME_REAL_PORT -u PLAYWRIGHT_CORE_PATH PATH="$P" WEB_UNLOCK_HOME="$(wp "$T/cdpenv")" "$NODE" "$SK/bin/cdp.mjs" https://a.example 2>&1); rc=$?
+[ $rc -eq 4 ] && [[ "$out" == *"on port 1:"* ]] && pass "cdp.mjs reads CHROME_REAL_PORT and PLAYWRIGHT_CORE_PATH from the env file" || fail "cdp env file" "rc=$rc $out"
+out=$(cd "$T" && env PATH="$P" CHROME_REAL_PORT=2 WEB_UNLOCK_HOME="$(wp "$T/cdpenv")" "$NODE" "$SK/bin/cdp.mjs" https://a.example 2>&1); rc=$?
+[[ "$out" == *"on port 2:"* ]] && pass "cdp.mjs: the environment wins over the env file" || fail "cdp env wins" "rc=$rc $out"
 
 echo "== install.sh =="
 out=$(bash "$ROOT/install.sh" --dry-run 2>&1); rc=$?

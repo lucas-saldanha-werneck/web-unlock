@@ -34,5 +34,8 @@ run chmod +x "$DST/bin/fetch.sh" "$DST/bin/search.sh" "$DST/bin/chrome-real.sh" 
 echo "skill: $DST"
 # Your folder (seeded once, never overwritten): the same code path as `bin/user-config.sh --init` and the plugin's hook.
 if [ $DRY = 1 ]; then echo "would run: WEB_UNLOCK_HOME=$CFG bash $DST/bin/user-config.sh --init"
-else WEB_UNLOCK_HOME="$CFG" bash "$DST/bin/user-config.sh" --init | sed 's/^/registry: /'; fi
+elif ! WEB_UNLOCK_HOME="$CFG" bash "$DST/bin/user-config.sh" --init | sed 's/^/registry: /'; then
+  # not fatal: the skill is installed and uses its bundled registry until the folder exists
+  echo "registry: $CFG not created now (see the message above; seeding needs node). The skill uses its bundled registry until then."
+fi
 echo "optional keys file: $CFG/env (EXA_API_KEY, SERPER_API_KEY, JINA_API_KEY, BRIGHTDATA_API_KEY, BRIGHTDATA_UNLOCKER_ZONE)"
