@@ -198,6 +198,53 @@ out=$(WEB_UNLOCK_HOME="$U" CHROME_REAL_PROFILE="$T/prof" env PATH="$P" bash "$SK
 out=$(uc --bogus 2>&1); rc=$?
 [ $rc -eq 1 ] && pass "user-config.sh unknown option -> exit 1" || fail "uc bogus" "$out"
 
+echo "== review fixes =="
+out=$("$NODE" "$SK/bin/blocked" "$S/generic-pt-error-page.html"); [[ "$out" == *"error-wall (generic)"* ]] && pass "Portuguese error wall on a non-Mercado Livre page is labelled generic" || fail "pt wall label generic" "$out"
+out=$("$NODE" "$SK/bin/blocked" "$S/mercadolivre-pt-error-wall.txt"); [[ "$out" == *"mercadolibre-error-wall (mercadolibre)"* ]] && pass "the same wall on Mercado Livre keeps its Mercado Livre label" || fail "pt wall label ml" "$out"
+# 3: a variable set by the caller wins over the env file
+mkdir -p "$HOME/.config/web-unlock"; echo 'WEB_UNLOCK_SEARCH_ORDER="tavily"' > "$HOME/.config/web-unlock/env"
+out=$(WEB_UNLOCK_SEARCH_ORDER="serper" SERPER_API_KEY="$DUMMY" FAKE_SERPER_BODY="$T/serper.json" search "q"); rc=$?
+[ $rc -eq 0 ] && [[ "$out" == *'"provider": "serper"'* ]] && pass "explicit WEB_UNLOCK_SEARCH_ORDER beats the env file" || fail "explicit beats file" "$out"
+rm -f "$HOME/.config/web-unlock/env"
+# 9: WEB_UNLOCK_HOME inside the env file is ignored, so all lookups use one folder
+H9="$T/h9"; mkdir -p "$H9" "$T/elsewhere"; echo '{"hosts":{"one.example":{}}}' > "$H9/sites.json"
+printf 'WEB_UNLOCK_HOME=%s\n' "$T/elsewhere" > "$H9/env"
+out=$(WEB_UNLOCK_HOME="$H9" env PATH="$P" bash "$SK/bin/user-config.sh")
+[[ "$out" == *"home $H9 (exists)"* ]] && [[ "$out" == *"sites $H9/sites.json (1 hosts, from your folder)"* ]] \
+  && pass "WEB_UNLOCK_HOME in the env file is ignored" || fail "home in env file" "$out"
+# 6: host count matches what fetch.sh reads ("hosts" only) and skips "_" notes
+echo '{"_doc":"x","hosts":{"_note":"y","a.example":{},"b.example":{}}}' > "$H9/sites.json"
+out=$(WEB_UNLOCK_HOME="$H9" env PATH="$P" bash "$SK/bin/user-config.sh")
+[[ "$out" == *"(2 hosts, from your folder)"* ]] && pass "host count skips _doc and _ notes" || fail "count notes" "$out"
+echo '{"a.example":{},"b.example":{}}' > "$H9/sites.json"
+out=$(WEB_UNLOCK_HOME="$H9" env PATH="$P" bash "$SK/bin/user-config.sh")
+[[ "$out" == *"(0 hosts, from your folder)"* ]] && pass "a file without \"hosts\" counts 0, as fetch.sh reads it" || fail "count no hosts" "$out"
+# 7: --init failure is reported, not "seeded"
+printf 'x' > "$T/afile"
+out=$(WEB_UNLOCK_HOME="$T/afile/sub" env PATH="$P" bash "$SK/bin/user-config.sh" --init 2>&1); rc=$?
+[ $rc -ne 0 ] && [[ "$out" != *seeded* ]] && pass "--init that cannot create the folder exits non-zero" || fail "init failure" "rc=$rc $out"
+# 4: scripts work through a symlink (skipped where ln -s copies, as on Git Bash)
+mkdir -p "$T/links"; ln -s "$SK/bin/user-config.sh" "$T/links/uc" 2>/dev/null; ln -s "$SK/bin/search.sh" "$T/links/search" 2>/dev/null
+if [ -L "$T/links/uc" ]; then
+  out=$(env PATH="$P" bash "$T/links/uc" 2>&1); rc=$?
+  [ $rc -eq 0 ] && [[ "$out" == *"sites "* ]] && pass "user-config.sh runs through a symlink" || fail "symlink uc" "$out"
+  echo 'WEB_UNLOCK_SEARCH_ORDER="tavily"' > "$HOME/.config/web-unlock/env"
+  out=$(env PATH="$P" SERPER_API_KEY="$DUMMY" FAKE_SERPER_BODY="$T/serper.json" bash "$T/links/search" q 2>&1); rc=$?
+  rm -f "$HOME/.config/web-unlock/env"
+  [ $rc -eq 0 ] && [[ "$out" == *'"provider": "tavily"'* ]] && pass "search.sh through a symlink still loads the env file" || fail "symlink search" "$out"
+else pass "symlink checks skipped: ln -s made a copy on this system"; fi
+# 5: chrome-real.sh does not export the env file's API keys to the processes it starts
+H5="$T/h5"; mkdir -p "$H5"; printf '%s=%s\n' SOME_API_KEY "$DUMMY" CHROME_REAL_PORT 9231 > "$H5/env"
+printf '#!/bin/sh\nenv > "%s"\n' "$T/ps-env.txt" > "$SB/ps"; chmod +x "$SB/ps"; rm -f "$T/ps-env.txt"
+out=$(WEB_UNLOCK_HOME="$H5" CHROME_REAL_APP="$T/fake-chrome" CHROME_REAL_PROFILE="$T/prof5" env PATH="$P" bash "$SK/bin/chrome-real.sh" status 2>&1)
+if [ -f "$T/ps-env.txt" ]; then
+  ! grep -q SOME_API_KEY "$T/ps-env.txt" && pass "chrome-real.sh keeps API keys out of child processes" || fail "chrome env leak" "key found in the child's environment"
+else pass "chrome-real child-env check skipped: no process lookup on this OS ($out)"; fi
+rm -f "$SB/ps"
+# 10: install.sh seeds the folder through user-config.sh --init (which also makes references/)
+H10="$T/h10"; out=$(WEB_UNLOCK_HOME="$H10" CLAUDE_CONFIG_DIR="$T/cc10" bash "$ROOT/install.sh" 2>&1); rc=$?
+[ $rc -eq 0 ] && [ -f "$H10/sites.json" ] && [ -d "$H10/references" ] && pass "install.sh seeds through user-config.sh --init" || fail "install init" "rc=$rc $out"
+
 echo "== chrome-real.sh / cdp.mjs =="
 out=$(env PATH="$P" CHROME_REAL_PORT=1 CHROME_REAL_PROFILE="$T/prof" bash "$SK/bin/chrome-real.sh" status 2>&1)
 [[ "$out" == stopped* ]] && pass "status with nothing running -> stopped" || fail "status" "$out"

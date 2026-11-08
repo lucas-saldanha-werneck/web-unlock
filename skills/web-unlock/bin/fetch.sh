@@ -8,7 +8,10 @@
 # The page body always goes to a file, never to the terminal.
 # Exit code: 0 = OK, 2 = blocked, 1 = usage error.
 set -uo pipefail
-HERE="$(cd "$(dirname "$0")" && pwd)"; SKILL="$(dirname "$HERE")"
+# Find this script's real folder, following symlinks (readlink without -f works on macOS bash 3.2 too).
+_self="$0"; _n=0
+while [ -L "$_self" ] && [ $_n -lt 40 ]; do _n=$((_n+1)); _l="$(readlink "$_self")"; case "$_l" in /*) _self="$_l";; *) _self="$(dirname "$_self")/$_l";; esac; done
+HERE="$(cd "$(dirname "$_self")" && pwd)"; SKILL="$(dirname "$HERE")"
 usage() { echo "usage: fetch.sh <url> [-o output] [--start L0|L1|L2] [--stop L0|L1|L2]"; }
 case "${1:-}" in ""|-h|--help) usage; [ -n "${1:-}" ] && exit 0; exit 1;; esac
 URL="$1"; shift
@@ -21,6 +24,7 @@ while [ $# -gt 0 ]; do case "$1" in
 # (JINA_API_KEY, BRIGHTDATA_API_KEY, BRIGHTDATA_UNLOCKER_ZONE, WEB_UNLOCK_*), and your sites.json.
 # shellcheck source=../lib/config.sh
 . "$SKILL/lib/config.sh"
+wu_load_env export
 SITES="$(wu_sites)"
 PY="$(command -v python3 || command -v python || true)"
 command -v node >/dev/null || { echo "BLOCKED none node-missing | fetch.sh needs node on PATH for the block detector"; exit 2; }

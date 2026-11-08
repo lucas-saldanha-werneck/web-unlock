@@ -10,15 +10,20 @@
 #   sites <file> (<N> hosts, from WEB_UNLOCK_SITES|your folder|the bundled example)
 #   env <file> (present|absent)
 set -uo pipefail
-HERE="$(cd "$(dirname "$0")" && pwd)"; SKILL="$(dirname "$HERE")"
+# Find this script's real folder, following symlinks (readlink without -f works on macOS bash 3.2 too).
+_self="$0"; _n=0
+while [ -L "$_self" ] && [ $_n -lt 40 ]; do _n=$((_n+1)); _l="$(readlink "$_self")"; case "$_l" in /*) _self="$_l";; *) _self="$(dirname "$_self")/$_l";; esac; done
+HERE="$(cd "$(dirname "$_self")" && pwd)"; SKILL="$(dirname "$HERE")"
 # shellcheck source=../lib/config.sh
 . "$SKILL/lib/config.sh"
+wu_load_env local WEB_UNLOCK_SITES
 case "${1:-}" in
   "") ;;
   --init)
-    mkdir -p "$WEB_UNLOCK_HOME/references"
+    mkdir -p "$WEB_UNLOCK_HOME/references" 2>/dev/null || { echo "user-config.sh: could not create $WEB_UNLOCK_HOME/references" >&2; exit 1; }
     if [ -f "$WEB_UNLOCK_HOME/sites.json" ]; then echo "kept $WEB_UNLOCK_HOME/sites.json"
-    else cp "$SKILL/sites.json" "$WEB_UNLOCK_HOME/sites.json"; echo "seeded $WEB_UNLOCK_HOME/sites.json"; fi ;;
+    elif cp "$SKILL/sites.json" "$WEB_UNLOCK_HOME/sites.json" 2>/dev/null; then echo "seeded $WEB_UNLOCK_HOME/sites.json"
+    else echo "user-config.sh: could not copy the bundled sites.json to $WEB_UNLOCK_HOME" >&2; exit 1; fi ;;
   -h|--help) sed -n '2,11p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
   *) echo "user-config.sh: unknown option $1 (use --init or nothing)" >&2; exit 1 ;;
 esac
@@ -41,8 +46,9 @@ if [ -n "$PY" ] && [ -f "$SITES" ]; then
   n=$("$PY" -c 'import json,sys
 try:
     d = json.load(open(sys.argv[1], encoding="utf-8"))
-    h = d.get("hosts", d) if isinstance(d, dict) else {}
-    print(len(h))
+    h = d.get("hosts", {}) if isinstance(d, dict) else {}
+    # Same shape fetch.sh reads; keys starting with "_" are notes, not hosts.
+    print(len([k for k in h if not k.startswith("_")]) if isinstance(h, dict) else 0)
 except Exception:
     print("unreadable")' "$SITES" 2>/dev/null || echo "?")
 fi

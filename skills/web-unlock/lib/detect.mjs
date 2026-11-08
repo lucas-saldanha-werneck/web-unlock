@@ -24,7 +24,6 @@ const STRONG = [
   [/Hubo un error accediendo a esta pagina/i, 'mercadolibre-error-wall', 'mercadolibre'],
   [/Por segurança, complete esta etapa/i, 'mercadolibre-captcha-wall', 'mercadolibre'],
   [/Para continuar, acesse sua conta/i, 'mercadolibre-login-wall', 'mercadolibre'],
-  [/Ocorreu um erro\. Por favor, tente novamente/i, 'mercadolibre-error-wall', 'mercadolibre'],
   [/linkedin\.com\/authwall|\bauthwall\b/i, 'authwall', 'linkedin'],
   // Reader proxies (r.jina.ai) that return the target's error as a page
   [/Warning:\s*Target URL returned error\s*(4\d\d|5\d\d)/i, 'reader-target-error', 'reader'],
@@ -46,7 +45,13 @@ const WIDGET = [
   [/g-recaptcha|recaptcha\/api\.js|hcaptcha\.com\/1\/api\.js/i, 'captcha-widget', 'captcha'],
 ];
 // Short error pages: only counted when the whole output is small, so docs prose does not trigger it.
-const SHORT_PAGE = /Too Many Requests|Rate limit exceeded|\bForbidden\b|Access Denied|Request blocked|Ocorreu um erro|tente novamente|Something went wrong|try again later|Service Unavailable/i;
+const SHORT_PAGE = /Too Many Requests|Rate limit exceeded|\bForbidden\b|Access Denied|Request blocked|Something went wrong|try again later|Service Unavailable/i;
+// A Portuguese error wall ("Ocorreu um erro. Por favor, tente novamente"), as Mercado Livre serves it. The
+// phrase is common in i18n strings and API messages, so it counts only in the visible text of a short page
+// (HTML without scripts, or reader/plain-text output that is not JSON), and is named after Mercado Livre
+// only when the page is from Mercado Livre.
+const PT_ERROR_WALL = /Ocorreu um erro\. Por favor, tente novamente/i;
+const MERCADOLIVRE = /mercado ?li[bv]re/i;
 const BLOCKED_STATUS = [401, 403, 406, 429, 451, 503];
 
 function visibleText(t) {
@@ -79,6 +84,14 @@ export function detect(text, opts = {}) {
   // Shell page: lots of HTML, almost no visible text (a JS-rendered block or login page).
   if (vis !== null && t.length > 10000 && vis.length < 600) {
     return { blocked: true, reason: 'shell-page', vendor: 'structural', match: `${t.length} bytes of HTML, ${vis.length} visible chars` };
+  }
+  const pageText = vis !== null ? vis : (/^\s*[[{]/.test(t) ? null : t);
+  if (pageText !== null && pageText.length < 2000) {
+    const m = PT_ERROR_WALL.exec(pageText);
+    if (m) {
+      const ml = MERCADOLIVRE.test(t);
+      return hit(m, ml ? 'mercadolibre-error-wall' : 'error-wall', ml ? 'mercadolibre' : 'generic');
+    }
   }
   if (t.length < 2000) {
     const m = SHORT_PAGE.exec(t);

@@ -62,8 +62,9 @@ They use the same layer names and the same `sites.json` format.
 
 The guard finds this skill on its own, whether it sits at `~/.claude/skills/web-unlock` (the `./install.sh`
 way) or is installed as this plugin (guard 0.4.0 or later), and it reads the same registry,
-`~/.config/web-unlock/sites.json`. To use another file, point the guard's `sites_file` and this skill's
-`WEB_UNLOCK_SITES` at it.
+`~/.config/web-unlock/sites.json`. The guard does not read this skill's `env` file: if you move the registry
+with `WEB_UNLOCK_SITES` or the folder with `WEB_UNLOCK_HOME`, also set the guard's `sites_file` option to the
+same file.
 
 ## Your own folder (survives plugin updates)
 
@@ -77,7 +78,7 @@ overwrites a file you have.
 | `*.md` (for example `rules.md`) | Your own rules: the sites you log into, the accounts to check, tools you have, extra rungs, the language to answer in. The skill tells Claude to run `bin/user-config.sh` first and read these files before the rest of `SKILL.md`; where they disagree, yours win |
 | `references/` | Your own reference notes. A file with the same name as one in the skill's `references/` replaces it; other files add to them |
 | `sites.json` | Your registry. The scripts use it before the bundled example, and Claude records new routes here |
-| `env` | Shell file sourced by every script: API keys and any setting from the table below (for example `WEB_UNLOCK_SEARCH_ORDER=...` or `CHROME_REAL_APP=...`). `chmod 600`; `user-config.sh` only says whether it exists |
+| `env` | Shell file read by every script: API keys and any setting from the table below (for example `WEB_UNLOCK_SEARCH_ORDER=...` or `CHROME_REAL_APP=...`). A variable already set in the environment wins. `fetch.sh` and `search.sh` export the file's values for the CLIs they call; `chrome-real.sh` takes only `CHROME_REAL_*` and does not pass API keys to Chrome. `chmod 600`; `user-config.sh` only says whether it exists |
 
 `bin/user-config.sh` prints one line per item:
 
@@ -98,13 +99,14 @@ Move its content into your folder (its rules into `rules.md`, its registry into 
 
 ## Configuration
 
-All optional. Each can be set in the environment or in the `env` file of your folder.
+All optional. Each can be set in the environment or in the `env` file of your folder; a value already set in
+the environment wins over the file. These settings reach this skill's scripts only, not web-unlock-guard.
 
 | Env var | Default | Meaning |
 |---|---|---|
-| `WEB_UNLOCK_HOME` | `~/.config/web-unlock` | Your own folder (environment only, since the `env` file lives inside it) |
+| `WEB_UNLOCK_HOME` | `~/.config/web-unlock` | Your own folder. Environment only: a `WEB_UNLOCK_HOME` line in the `env` file is ignored |
 | `WEB_UNLOCK_SITES` | `sites.json` in your folder if it exists, else the bundled example | Site registry |
-| `WEB_UNLOCK_ENV` | `env` in your folder | Shell file with API keys and settings, sourced by every script |
+| `WEB_UNLOCK_ENV` | `env` in your folder | Shell file with API keys and settings, read by every script (environment only) |
 | `WEB_UNLOCK_SEARCH_ORDER` | `exa-mcp exa serper tavily firecrawl` | Providers `search.sh` tries, in order (space or comma separated; ones left out are skipped) |
 | `WEB_UNLOCK_TMP` | `$TMPDIR/web-unlock` | Where fetched pages go when `-o` is not given |
 | `WEB_UNLOCK_ACCEPT_LANGUAGE` | `en-US,en;q=0.9` | `Accept-Language` for plain curl |

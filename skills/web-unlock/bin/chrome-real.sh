@@ -25,9 +25,14 @@
 # Then: node bin/cdp.mjs <url> --title  |  playwright connectOverCDP('http://127.0.0.1:9223')  |  agent-browser --cdp 9223 ...
 # Platforms: macOS and Linux. Windows is not supported by this script.
 set -uo pipefail
-HERE="$(cd "$(dirname "$0")" && pwd)"; SKILL="$(dirname "$HERE")"
+# Find this script's real folder, following symlinks (readlink without -f works on macOS bash 3.2 too).
+_self="$0"; _n=0
+while [ -L "$_self" ] && [ $_n -lt 40 ]; do _n=$((_n+1)); _l="$(readlink "$_self")"; case "$_l" in /*) _self="$_l";; *) _self="$(dirname "$_self")/$_l";; esac; done
+HERE="$(cd "$(dirname "$_self")" && pwd)"; SKILL="$(dirname "$HERE")"
 # shellcheck source=../lib/config.sh
-. "$SKILL/lib/config.sh"   # CHROME_REAL_* can live in the env file of your folder (~/.config/web-unlock/env)
+. "$SKILL/lib/config.sh"
+# Only the browser settings, not exported: Chrome must not inherit the API keys in the env file.
+wu_load_env local CHROME_REAL_PORT CHROME_REAL_PROFILE CHROME_REAL_APP
 OS="$(uname -s 2>/dev/null || echo unknown)"
 DST="${CHROME_REAL_PROFILE:-$HOME/.chrome-automation-profile}"
 PORT="${CHROME_REAL_PORT:-9223}"
@@ -114,7 +119,7 @@ case "$cmd" in
     if port_open; then
       echo "OK automation Chrome (headed) | profile $DST | cdp http://127.0.0.1:$PORT | pid $(pid_of)"
       if [ "$LOGIN" = 1 ]; then open_tab "$URL" false; activate "$(pid_of)"; elif [ -n "$URL" ]; then open_tab "$URL"; fi
-      echo "next: node $(dirname "$0")/cdp.mjs <url> --title   |   connectOverCDP('http://127.0.0.1:$PORT')"
+      echo "next: node $HERE/cdp.mjs <url> --title   |   connectOverCDP('http://127.0.0.1:$PORT')"
     else echo "FAILED: port $PORT did not open. Log: $LOG"; tail -5 "$LOG" 2>/dev/null || true; exit 1; fi ;;
   status)
     P=$(pid_of)

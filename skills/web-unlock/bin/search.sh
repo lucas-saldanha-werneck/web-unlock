@@ -19,9 +19,13 @@ N=5; PROV=auto; GL=""; HL=""
 while [ $# -gt 0 ]; do case "$1" in
   -n) N="$2"; shift 2;; --provider) PROV="$2"; shift 2;; --gl) GL="$2"; shift 2;; --hl) HL="$2"; shift 2;;
   *) echo "search.sh: unknown option $1" >&2; usage >&2; exit 1;; esac; done
-HERE="$(cd "$(dirname "$0")" && pwd)"; SKILL="$(dirname "$HERE")"
+# Find this script's real folder, following symlinks (readlink without -f works on macOS bash 3.2 too).
+_self="$0"; _n=0
+while [ -L "$_self" ] && [ $_n -lt 40 ]; do _n=$((_n+1)); _l="$(readlink "$_self")"; case "$_l" in /*) _self="$_l";; *) _self="$(dirname "$_self")/$_l";; esac; done
+HERE="$(cd "$(dirname "$_self")" && pwd)"; SKILL="$(dirname "$HERE")"
 # shellcheck source=../lib/config.sh
-. "$SKILL/lib/config.sh"   # env file in your folder: keys, WEB_UNLOCK_SEARCH_ORDER
+. "$SKILL/lib/config.sh"
+wu_load_env export   # env file in your folder: keys, WEB_UNLOCK_SEARCH_ORDER (exported for tvly/firecrawl)
 PY="$(command -v python3 || command -v python || true)"
 export PYTHONIOENCODING=utf-8
 [ -n "$PY" ] || { echo '{"error":"search.sh needs python3 on PATH"}' >&2; exit 1; }

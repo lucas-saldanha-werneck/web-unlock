@@ -32,11 +32,7 @@ run cp -R "$SRC" "$DST"
 [ $DRY = 1 ] || touch "$DST/.installed-by-web-unlock"
 run chmod +x "$DST/bin/fetch.sh" "$DST/bin/search.sh" "$DST/bin/chrome-real.sh" "$DST/bin/blocked" "$DST/bin/cdp.mjs" "$DST/bin/user-config.sh"
 echo "skill: $DST"
-if [ -f "$CFG/sites.json" ]; then
-  echo "registry: kept your $CFG/sites.json"
-else
-  run mkdir -p "$CFG"
-  run cp "$SRC/sites.json" "$CFG/sites.json"
-  echo "registry: seeded $CFG/sites.json from the bundled example"
-fi
+# Your folder (registry seeded once, never overwritten): the same code path as `bin/user-config.sh --init`.
+if [ $DRY = 1 ]; then echo "would run: WEB_UNLOCK_HOME=$CFG bash $DST/bin/user-config.sh --init"
+else WEB_UNLOCK_HOME="$CFG" bash "$DST/bin/user-config.sh" --init | sed 's/^/registry: /'; fi
 echo "optional keys file: $CFG/env (EXA_API_KEY, SERPER_API_KEY, JINA_API_KEY, BRIGHTDATA_API_KEY, BRIGHTDATA_UNLOCKER_ZONE)"
