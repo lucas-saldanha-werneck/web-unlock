@@ -17,8 +17,13 @@ a real headed Chrome instead of a default automation browser.
 | `bin/search.sh "query"` | Search with failover: free Exa MCP -> Exa API -> Serper (Google) -> Tavily -> Firecrawl. One JSON object per result line |
 | `bin/blocked <file>` | Block detector: `OK` or `BLOCKED:<reason>` (Cloudflare, DataDome, PerimeterX, Kasada, Imperva, Akamai, captcha widgets, authwalls, reader errors, shells) |
 | `bin/chrome-real.sh` | Starts a real, headed Chrome in its own empty profile with CDP on port 9223, without stealing focus |
+| `bin/user-config.sh` | Shows your own settings folder (rules, references, registry, keys file), creating it first if it is missing |
 | `bin/cdp.mjs <url>` | Drives that Chrome through Playwright's `connectOverCDP` in a background tab: `--title`, `--text`, `--html file`, `--eval js` |
-| `sites.json` | Example registry: host -> tags, route that worked, how |
+| `bin/sites <host>` | Looks a host up in the registry: the bundled `sites.json` with yours laid on top (`--all` prints the merged registry) |
+| `sites.json` | Bundled registry: host -> tags, route that worked, how. Yours is laid over it (`lib/sites.py`) |
+| `sites.starter.json` | Starter for your own registry: `{"hosts": {}}` |
+| `env.default` | Starter `env` file: every setting at its default, commented out |
+| `lib/seed.mjs` | Creates your settings folder on first run (run by the plugin's `hooks/hooks.json` at session start) |
 | `references/` | Search doctrine, why a real browser passes where automation fails, the list of block signals |
 
 ## Example
@@ -59,18 +64,61 @@ that deny the third identical try on a blocked host, headless and default automa
 sites, and `--remote-debugging-port` without `--user-data-dir`. This skill is the "what to do instead" half.
 They use the same layer names and the same `sites.json` format.
 
-The guard finds this skill on its own when it sits at `~/.claude/skills/web-unlock` (the `./install.sh` way).
-With the plugin install, set the guard's `skill_dir` option to this plugin's `skills/web-unlock` folder, or
-point both at one registry: the guard's `sites_file` and this skill's `WEB_UNLOCK_SITES` to the same file.
+The guard finds this skill on its own, whether it sits at `~/.claude/skills/web-unlock` (the `./install.sh`
+way) or is installed as this plugin (guard 0.4.0 or later), and it reads the same registry,
+`~/.config/web-unlock/sites.json`, laid over the skill's bundled one the same way. The guard does not read this skill's `env` file: if you move the registry
+with `WEB_UNLOCK_SITES` or the folder with `WEB_UNLOCK_HOME`, also set the guard's `sites_file` option to the
+same file.
+
+## Your settings
+
+Your settings live in `~/.config/web-unlock` (or the folder in `WEB_UNLOCK_HOME`). The plugin creates that
+folder by itself the first time it runs (a `SessionStart` hook; with `./install.sh`, the install does it):
+an empty `sites.json` (`{"hosts": {}}`), an `env` file with every setting commented out at its default
+(see Configuration), and an empty `references/`. Plugin updates never touch the folder, and the seeding never
+overwrites or changes a file that is already there. The files it writes behave exactly like having no folder.
+
+## Your own folder (survives plugin updates)
+
+The plugin folder is replaced on every update, so your own things live in a folder of yours:
+`~/.config/web-unlock` (or the folder in `WEB_UNLOCK_HOME`). `skills/web-unlock/bin/user-config.sh` creates
+it too if it is missing (`--init` says what it seeded or kept).
+
+| In your folder | What it is for |
+|---|---|
+| `*.md` (for example `rules.md`) | Your own rules: the sites you log into, the accounts to check, tools you have, extra rungs, the language to answer in. The skill tells Claude to run `bin/user-config.sh` first and read these files before the rest of `SKILL.md`; where they disagree, yours win |
+| `references/` | Your own reference notes. A file with the same name as one in the skill's `references/` replaces it; other files add to them |
+| `sites.json` | Your registry, laid over the bundled one: the bundled hosts first, then yours; a host in both is your entry, whole. New bundled hosts from plugin updates still reach you. A full copy of an older bundled file keeps working (it overrides every host it lists). Claude records new routes here; `bin/sites <host>` shows the merged entry |
+| `env` | Shell file read by every script: API keys and any setting from the table below (for example `WEB_UNLOCK_SEARCH_ORDER=...` or `CHROME_REAL_APP=...`). A variable already set in the environment wins. `fetch.sh` and `search.sh` export the file's values for the CLIs they call; `chrome-real.sh` takes only `CHROME_REAL_*` and does not pass API keys to Chrome. `chmod 600`; `user-config.sh` only says whether it exists |
+
+`bin/user-config.sh` prints one line per item:
+
+```
+home /Users/me/.config/web-unlock (exists)
+rules /Users/me/.config/web-unlock/rules.md
+reference /Users/me/.config/web-unlock/references/search-doctrine.md replaces .../references/search-doctrine.md
+sites /Users/me/.config/web-unlock/sites.json (93 hosts, from your folder; 98 with the bundled ones)
+env /Users/me/.config/web-unlock/env (present)
+```
+
+Nothing in that folder is touched by `/plugin update`, by `./install.sh` or by an uninstall.
+
+If you also keep a personal skill called `web-unlock` in `~/.claude/skills/`, Claude sees two skills with
+almost the same description (`web-unlock` and the plugin's `web-unlock:web-unlock`) and may load either.
+Move its content into your folder (its rules into `rules.md`, its registry into `sites.json`, its notes into
+`references/`) and remove the personal copy, or keep only the personal one.
 
 ## Configuration
 
-All optional.
+All optional. Each can be set in the environment or in the `env` file of your folder; a value already set in
+the environment wins over the file. These settings reach this skill's scripts only, not web-unlock-guard.
 
 | Env var | Default | Meaning |
 |---|---|---|
-| `WEB_UNLOCK_SITES` | `~/.config/web-unlock/sites.json` if it exists, else the bundled example | Site registry |
-| `WEB_UNLOCK_ENV` | `~/.config/web-unlock/env` | Shell file with API keys, sourced by `fetch.sh` and `search.sh` |
+| `WEB_UNLOCK_HOME` | `~/.config/web-unlock` | Your own folder. Environment only: a `WEB_UNLOCK_HOME` line in the `env` file is ignored |
+| `WEB_UNLOCK_SITES` | `sites.json` in your folder | Your site registry, laid over the bundled one |
+| `WEB_UNLOCK_ENV` | `env` in your folder | Shell file with API keys and settings, read by every script (environment only) |
+| `WEB_UNLOCK_SEARCH_ORDER` | `exa-mcp exa serper tavily firecrawl` | Providers `search.sh` tries, in order (space or comma separated; ones left out are skipped) |
 | `WEB_UNLOCK_TMP` | `$TMPDIR/web-unlock` | Where fetched pages go when `-o` is not given |
 | `WEB_UNLOCK_ACCEPT_LANGUAGE` | `en-US,en;q=0.9` | `Accept-Language` for plain curl |
 | `WEB_UNLOCK_NO_SCRAPLING` | unset | `1` skips Scrapling in `fetch.sh` |
@@ -82,8 +130,6 @@ All optional.
 Keys read from the env file, each optional: `EXA_API_KEY`, `SERPER_API_KEY`, `JINA_API_KEY`,
 `BRIGHTDATA_API_KEY` + `BRIGHTDATA_UNLOCKER_ZONE`. Keep the file out of any repo (`chmod 600`).
 
-Keep your registry outside the plugin folder (plugin updates replace it): copy `skills/web-unlock/sites.json`
-to `~/.config/web-unlock/sites.json` and add hosts as you learn them. The skill tells Claude to write there.
 
 ## Requirements
 
@@ -122,7 +168,10 @@ bash tests/run.sh
 
 No network: `curl`, `mcporter`, `tvly` and `scrapling` are fakes on a sandboxed `PATH`, and `HOME` is a temp
 folder. It covers the detector on synthetic block pages, every `fetch.sh` layer and registry lookup, search
-failover and normalization, `chrome-real.sh` refusals, and `install.sh`.
+failover, order and normalization, the user folder (`WEB_UNLOCK_HOME`, its `env`, rules, references and
+registry), the first-run seeding (created when missing, existing files byte-identical, overrides respected,
+no crash on a read-only folder, seeded defaults behave like no folder), `chrome-real.sh` refusals, and
+`install.sh`.
 
 ## Uninstall
 

@@ -1,14 +1,14 @@
 #!/usr/bin/env bash
 # web-unlock: optional install WITHOUT the plugin system.
 # Copies skills/web-unlock to ~/.claude/skills/web-unlock (where web-unlock-guard looks for a companion skill
-# by default) and seeds your own registry at ~/.config/web-unlock/sites.json (never overwritten).
+# by default) and seeds your own folder ~/.config/web-unlock (sites.json, env; never overwritten).
 # Usage: ./install.sh [--dry-run] [--uninstall]
 # Use this OR the plugin install, not both, or Claude sees the skill twice.
 set -euo pipefail
 HERE="$(cd "$(dirname "$0")" && pwd)"
 SRC="$HERE/skills/web-unlock"
 DST="${CLAUDE_CONFIG_DIR:-$HOME/.claude}/skills/web-unlock"
-CFG="$HOME/.config/web-unlock"
+CFG="${WEB_UNLOCK_HOME:-$HOME/.config/web-unlock}"
 DRY=0; UNINSTALL=0
 for a in "$@"; do case "$a" in
   --dry-run) DRY=1;; --uninstall) UNINSTALL=1;;
@@ -30,13 +30,12 @@ run mkdir -p "$(dirname "$DST")"
 run rm -rf "$DST"
 run cp -R "$SRC" "$DST"
 [ $DRY = 1 ] || touch "$DST/.installed-by-web-unlock"
-run chmod +x "$DST/bin/fetch.sh" "$DST/bin/search.sh" "$DST/bin/chrome-real.sh" "$DST/bin/blocked" "$DST/bin/cdp.mjs"
+run chmod +x "$DST/bin/fetch.sh" "$DST/bin/search.sh" "$DST/bin/chrome-real.sh" "$DST/bin/blocked" "$DST/bin/cdp.mjs" "$DST/bin/user-config.sh" "$DST/bin/sites"
 echo "skill: $DST"
-if [ -f "$CFG/sites.json" ]; then
-  echo "registry: kept your $CFG/sites.json"
-else
-  run mkdir -p "$CFG"
-  run cp "$SRC/sites.json" "$CFG/sites.json"
-  echo "registry: seeded $CFG/sites.json from the bundled example"
+# Your folder (seeded once, never overwritten): the same code path as `bin/user-config.sh --init` and the plugin's hook.
+if [ $DRY = 1 ]; then echo "would run: WEB_UNLOCK_HOME=$CFG bash $DST/bin/user-config.sh --init"
+elif ! WEB_UNLOCK_HOME="$CFG" bash "$DST/bin/user-config.sh" --init | sed 's/^/registry: /'; then
+  # not fatal: the skill is installed and uses its bundled registry until the folder exists
+  echo "registry: $CFG not created now (see the message above; seeding needs node). The skill uses its bundled registry until then."
 fi
 echo "optional keys file: $CFG/env (EXA_API_KEY, SERPER_API_KEY, JINA_API_KEY, BRIGHTDATA_API_KEY, BRIGHTDATA_UNLOCKER_ZONE)"

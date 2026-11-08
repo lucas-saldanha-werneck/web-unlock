@@ -8,6 +8,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { createRequire } from 'node:module';
 import { execSync } from 'node:child_process';
+import { setting } from '../lib/envfile.mjs';  // CHROME_REAL_PORT, PLAYWRIGHT_CORE_PATH: env, then your env file
 
 const a = process.argv.slice(2);
 if (a.includes('-h') || a.includes('--help')) {
@@ -21,13 +22,14 @@ for (let i = 0; i < a.length; i++) {
   if (!a[i].startsWith('--')) { url = a[i]; break; }
 }
 const opt = k => { const i = a.indexOf(k); return i >= 0 ? a[i + 1] : null; };
-const port = opt('--port') || process.env.CHROME_REAL_PORT || '9223';
+const port = opt('--port') || setting('CHROME_REAL_PORT') || '9223';
 const wait = Number(opt('--wait') || 1500);
 if (!url) { console.error('usage: cdp.mjs <url> [--title|--text|--html f|--eval js]'); process.exit(2); }
 
 function loadPlaywright() {
   const bases = [];
-  if (process.env.PLAYWRIGHT_CORE_PATH) bases.push(process.env.PLAYWRIGHT_CORE_PATH);
+  const pw = setting('PLAYWRIGHT_CORE_PATH');
+  if (pw) bases.push(pw);
   bases.push(path.join(process.cwd(), 'noop.js'), import.meta.url);
   try {
     const g = execSync('npm root -g', { stdio: ['ignore', 'pipe', 'ignore'], timeout: 10000 }).toString().trim();

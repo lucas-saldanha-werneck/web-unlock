@@ -17,8 +17,11 @@ T="$(mktemp -d 2>/dev/null || mktemp -d -t webunlock)"
 trap 'rm -rf "$T"' EXIT
 export HOME="$T/home" USERPROFILE="$T/home" TMPDIR="$T/tmp" WEB_UNLOCK_TMP="$T/tmp/web-unlock"
 mkdir -p "$HOME" "$TMPDIR"
-unset CLAUDE_CONFIG_DIR WEB_UNLOCK_SITES WEB_UNLOCK_ENV EXA_API_KEY SERPER_API_KEY JINA_API_KEY BRIGHTDATA_API_KEY BRIGHTDATA_UNLOCKER_ZONE
+unset CLAUDE_CONFIG_DIR WEB_UNLOCK_SITES WEB_UNLOCK_ENV WEB_UNLOCK_HOME WEB_UNLOCK_SEARCH_ORDER EXA_API_KEY SERPER_API_KEY JINA_API_KEY BRIGHTDATA_API_KEY BRIGHTDATA_UNLOCKER_ZONE
 DUMMY="dummy-value"   # stands in for an API key; the fakes never check it
+# A path node sees the same way bash does. Git Bash leaves a /tmp/... path that runs through a regular file
+# unconverted, and node would then read it as C:\tmp\...; the mixed form C:/... works in both.
+wp() { if command -v cygpath >/dev/null 2>&1; then cygpath -m "$1"; else printf '%s' "$1"; fi; }
 
 # ---------- 1. detector on the samples ----------
 echo "== detector =="
@@ -153,6 +156,225 @@ printf '#!/usr/bin/env bash\ncat "%s"\n' "$S/ok-search-json.txt" > "$SB/tvly"; c
 out=$(search "q" --provider tavily); rc=$?
 [ $rc -eq 0 ] && [[ "$out" == *'"provider": "tavily"'* ]] && pass "--provider tavily uses the tvly CLI" || fail "tavily" "$out"
 
+out=$(WEB_UNLOCK_SEARCH_ORDER="serper,tavily" SERPER_API_KEY="$DUMMY" FAKE_SERPER_BODY="$T/serper.json" search "q"); rc=$?
+[ $rc -eq 0 ] && [[ "$out" == *'"provider": "serper"'* ]] && [[ "$out" != *tavily* ]] \
+  && pass "WEB_UNLOCK_SEARCH_ORDER puts serper before tavily" || fail "search order" "$out"
+mkdir -p "$HOME/.config/web-unlock"; echo 'WEB_UNLOCK_SEARCH_ORDER="tavily"' > "$HOME/.config/web-unlock/env"
+out=$(SERPER_API_KEY="$DUMMY" FAKE_SERPER_BODY="$T/serper.json" search "q"); rc=$?
+[ $rc -eq 0 ] && [[ "$out" == *'"provider": "tavily"'* ]] && [[ "$out" != *serper* ]] \
+  && pass "settings in the user folder's env file reach search.sh" || fail "env-file order" "$out"
+rm -f "$HOME/.config/web-unlock/env"
+out=$(WEB_UNLOCK_SEARCH_ORDER="bogus" search "q" 2>"$T/err"); rc=$?
+[ $rc -eq 1 ] && grep -q "unknown provider bogus" "$T/err" && pass "unknown provider in WEB_UNLOCK_SEARCH_ORDER -> exit 1 with its name" || fail "bogus order" "$out $(cat "$T/err")"
+
+echo "== user folder (WEB_UNLOCK_HOME, user-config.sh) =="
+uc() { env PATH="$P" bash "$SK/bin/user-config.sh" "$@"; }
+out=$(uc); rc=$?
+[ $rc -eq 0 ] && [[ "$out" == *"home $HOME/.config/web-unlock (exists)"* ]] && [[ "$out" == *"sites $HOME/.config/web-unlock/sites.json"*"from your folder"* ]] \
+  && cmp -s "$HOME/.config/web-unlock/sites.json" "$SK/sites.starter.json" && [[ "$out" != *"rules "* ]] \
+  && pass "user-config.sh on first use seeds the registry quietly; no rules" || fail "uc empty" "$out"
+U="$T/mine"
+out=$(WEB_UNLOCK_HOME="$U" uc --init); rc=$?
+[ $rc -eq 0 ] && cmp -s "$U/sites.json" "$SK/sites.starter.json" && [ -d "$U/references" ] && [[ "$out" == *"sites $U/sites.json"*"from your folder"* ]] \
+  && pass "--init seeds WEB_UNLOCK_HOME/sites.json and references/" || fail "uc init" "$out"
+echo '{"hosts":{"a.example":{},"b.example":{}}}' > "$U/sites.json"
+WEB_UNLOCK_HOME="$U" uc --init >/dev/null
+grep -q a.example "$U/sites.json" && pass "--init keeps an existing sites.json" || fail "uc init keeps"
+printf '# my rules\n' > "$U/rules.md"; printf 'x\n' > "$U/references/search-doctrine.md"; printf 'y\n' > "$U/references/mine.md"
+printf 'SECRET_THING=%s\n' "$DUMMY" > "$U/env"
+out=$(WEB_UNLOCK_HOME="$U" uc)
+[[ "$out" == *"rules $U/rules.md"* ]] && pass "rules files in the user folder are listed" || fail "uc rules" "$out"
+[[ "$out" == *"reference $U/references/search-doctrine.md replaces $SK/references/search-doctrine.md"* ]] && [[ "$out" == *"reference $U/references/mine.md"$'\n'* || "$out" == *"reference $U/references/mine.md" ]] \
+  && pass "user references: same name replaces the bundled one, others add" || fail "uc refs" "$out"
+[[ "$out" == *"(2 hosts, from your folder;"* ]] && pass "registry from the user folder, with its host count" || fail "uc sites" "$out"
+[[ "$out" == *"env $U/env (present)"* ]] && [[ "$out" != *"$DUMMY"* ]] && pass "env file reported present, values never printed" || fail "uc env" "$out"
+out=$(WEB_UNLOCK_HOME="$U" WEB_UNLOCK_SITES="$T/sites.json" uc)
+[[ "$out" == *"sites $T/sites.json (3 hosts, from WEB_UNLOCK_SITES;"* ]] && pass "WEB_UNLOCK_SITES wins over the user folder" || fail "uc env sites" "$out"
+cp "$T/sites.json" "$U/sites.json"
+out=$(WEB_UNLOCK_HOME="$U" FAKE_L0_BODY="$CF" FAKE_JINA_BODY="$RTE" fetch https://example.com/x)
+[[ "$out" == *"fetch-unlock"* ]] && pass "fetch.sh reads the registry in WEB_UNLOCK_HOME" || fail "fetch home" "$out"
+printf '%s=%s\n' BRIGHTDATA_API_KEY "$DUMMY" BRIGHTDATA_UNLOCKER_ZONE zone1 > "$U/env"
+out=$(WEB_UNLOCK_HOME="$U" FAKE_L0_BODY="$CF" FAKE_JINA_BODY="$RTE" FAKE_BD_BODY="$GOODMD" fetch https://blocked.test/e); rc=$?
+[ $rc -eq 0 ] && [[ "$out" == "OK L2-brightdata "* ]] && pass "fetch.sh loads keys from WEB_UNLOCK_HOME/env" || fail "fetch home env" "$out"
+echo "CHROME_REAL_PORT=9222" > "$U/env"
+out=$(WEB_UNLOCK_HOME="$U" CHROME_REAL_PROFILE="$T/prof" env PATH="$P" bash "$SK/bin/chrome-real.sh" status 2>&1)
+[[ "$out" == *"WARNING: port 9222"* ]] && pass "chrome-real.sh reads CHROME_REAL_* from the user folder's env file" || fail "chrome env" "$out"
+out=$(uc --bogus 2>&1); rc=$?
+[ $rc -eq 1 ] && pass "user-config.sh unknown option -> exit 1" || fail "uc bogus" "$out"
+
+echo "== review fixes =="
+out=$("$NODE" "$SK/bin/blocked" "$S/generic-pt-error-page.html"); [[ "$out" == *"error-wall (generic)"* ]] && pass "Portuguese error wall on a non-Mercado Livre page is labelled generic" || fail "pt wall label generic" "$out"
+out=$("$NODE" "$SK/bin/blocked" "$S/mercadolivre-pt-error-wall.txt"); [[ "$out" == *"mercadolibre-error-wall (mercadolibre)"* ]] && pass "the same wall on Mercado Livre keeps its Mercado Livre label" || fail "pt wall label ml" "$out"
+# 3: a variable set by the caller wins over the env file
+mkdir -p "$HOME/.config/web-unlock"; echo 'WEB_UNLOCK_SEARCH_ORDER="tavily"' > "$HOME/.config/web-unlock/env"
+out=$(WEB_UNLOCK_SEARCH_ORDER="serper" SERPER_API_KEY="$DUMMY" FAKE_SERPER_BODY="$T/serper.json" search "q"); rc=$?
+[ $rc -eq 0 ] && [[ "$out" == *'"provider": "serper"'* ]] && pass "explicit WEB_UNLOCK_SEARCH_ORDER beats the env file" || fail "explicit beats file" "$out"
+rm -f "$HOME/.config/web-unlock/env"
+# 9: WEB_UNLOCK_HOME inside the env file is ignored, so all lookups use one folder
+H9="$T/h9"; mkdir -p "$H9" "$T/elsewhere"; echo '{"hosts":{"one.example":{}}}' > "$H9/sites.json"
+printf 'WEB_UNLOCK_HOME=%s\n' "$T/elsewhere" > "$H9/env"
+out=$(WEB_UNLOCK_HOME="$H9" env PATH="$P" bash "$SK/bin/user-config.sh")
+[[ "$out" == *"home $H9 (exists)"* ]] && [[ "$out" == *"sites $H9/sites.json (1 hosts, from your folder;"* ]] \
+  && pass "WEB_UNLOCK_HOME in the env file is ignored" || fail "home in env file" "$out"
+# 6: host count matches what fetch.sh reads ("hosts" only) and skips "_" notes
+echo '{"_doc":"x","hosts":{"_note":"y","a.example":{},"b.example":{}}}' > "$H9/sites.json"
+out=$(WEB_UNLOCK_HOME="$H9" env PATH="$P" bash "$SK/bin/user-config.sh")
+[[ "$out" == *"(2 hosts, from your folder;"* ]] && pass "host count skips _doc and _ notes" || fail "count notes" "$out"
+echo '{"a.example":{},"b.example":{}}' > "$H9/sites.json"
+out=$(WEB_UNLOCK_HOME="$H9" env PATH="$P" bash "$SK/bin/user-config.sh")
+[[ "$out" == *"(2 hosts, from your folder;"* ]] && pass "a file without \"hosts\" is a flat host map, as fetch.sh and the guard read it" || fail "count no hosts" "$out"
+# 7: --init failure is reported, not "seeded"
+printf 'x' > "$T/afile"
+out=$(WEB_UNLOCK_HOME="$(wp "$T/afile")/sub" env PATH="$P" bash "$SK/bin/user-config.sh" --init 2>&1); rc=$?
+[ $rc -ne 0 ] && [[ "$out" != *seeded* ]] && pass "--init that cannot create the folder exits non-zero" || fail "init failure" "rc=$rc $out"
+# 4: scripts work through a symlink (skipped where ln -s copies, as on Git Bash)
+mkdir -p "$T/links"; ln -s "$SK/bin/user-config.sh" "$T/links/uc" 2>/dev/null; ln -s "$SK/bin/search.sh" "$T/links/search" 2>/dev/null
+if [ -L "$T/links/uc" ]; then
+  out=$(env PATH="$P" bash "$T/links/uc" 2>&1); rc=$?
+  [ $rc -eq 0 ] && [[ "$out" == *"sites "* ]] && pass "user-config.sh runs through a symlink" || fail "symlink uc" "$out"
+  echo 'WEB_UNLOCK_SEARCH_ORDER="tavily"' > "$HOME/.config/web-unlock/env"
+  out=$(env PATH="$P" SERPER_API_KEY="$DUMMY" FAKE_SERPER_BODY="$T/serper.json" bash "$T/links/search" q 2>&1); rc=$?
+  rm -f "$HOME/.config/web-unlock/env"
+  [ $rc -eq 0 ] && [[ "$out" == *'"provider": "tavily"'* ]] && pass "search.sh through a symlink still loads the env file" || fail "symlink search" "$out"
+else pass "symlink checks skipped: ln -s made a copy on this system"; fi
+# 5: chrome-real.sh does not export the env file's API keys to the processes it starts
+H5="$T/h5"; mkdir -p "$H5"; printf '%s=%s\n' SOME_API_KEY "$DUMMY" CHROME_REAL_PORT 9231 > "$H5/env"
+printf '#!/bin/sh\nenv > "%s"\n' "$T/ps-env.txt" > "$SB/ps"; chmod +x "$SB/ps"; rm -f "$T/ps-env.txt"
+out=$(WEB_UNLOCK_HOME="$H5" CHROME_REAL_APP="$T/fake-chrome" CHROME_REAL_PROFILE="$T/prof5" env PATH="$P" bash "$SK/bin/chrome-real.sh" status 2>&1)
+if [ -f "$T/ps-env.txt" ]; then
+  ! grep -q SOME_API_KEY "$T/ps-env.txt" && pass "chrome-real.sh keeps API keys out of child processes" || fail "chrome env leak" "key found in the child's environment"
+else pass "chrome-real child-env check skipped: no process lookup on this OS ($out)"; fi
+rm -f "$SB/ps"
+# 10: install.sh seeds the folder through user-config.sh --init (which also makes references/)
+H10="$T/h10"; out=$(WEB_UNLOCK_HOME="$H10" CLAUDE_CONFIG_DIR="$T/cc10" bash "$ROOT/install.sh" 2>&1); rc=$?
+[ $rc -eq 0 ] && [ -f "$H10/sites.json" ] && [ -d "$H10/references" ] && pass "install.sh seeds through user-config.sh --init" || fail "install init" "rc=$rc $out"
+NONODE="/usr/bin:/bin"
+if env PATH="$NONODE" bash -c "command -v node" >/dev/null 2>&1; then pass "install.sh without node: skipped (node is in $NONODE)"
+else
+  H11="$T/h11"; out=$(env PATH="$NONODE" WEB_UNLOCK_HOME="$H11" CLAUDE_CONFIG_DIR="$T/cc11" bash "$ROOT/install.sh" 2>&1); rc=$?
+  [ $rc -eq 0 ] && [ -f "$T/cc11/skills/web-unlock/SKILL.md" ] && [[ "$out" == *"not created now"* ]] \
+    && pass "install.sh without node still installs the skill and says the folder waits" || fail "install no node" "rc=$rc $out"
+fi
+
+echo "== first-run seed (lib/seed.mjs, SessionStart hook) =="
+SEED="$SK/lib/seed.mjs"
+# what the plugin's hook runs: node seed.mjs, with only HOME set
+SH="$T/seedhome"; mkdir -p "$SH"
+out=$(env -u WEB_UNLOCK_HOME HOME="$SH" USERPROFILE="$SH" "$NODE" "$SEED" </dev/null 2>&1); rc=$?
+[ $rc -eq 0 ] && [ -z "$out" ] && cmp -s "$SH/.config/web-unlock/sites.json" "$SK/sites.starter.json" \
+  && cmp -s "$SH/.config/web-unlock/env" "$SK/env.default" && [ -d "$SH/.config/web-unlock/references" ] \
+  && pass "missing folder -> created with sites.json, env and references/, silently, exit 0" || fail "seed missing" "rc=$rc $out"
+n=$("$PY" -c 'import json,sys; d=json.load(open(sys.argv[1],encoding="utf-8")); print(d["hosts"] == {} and "_doc" in d)' "$SH/.config/web-unlock/sites.json" 2>&1)
+[ "$n" = "True" ] && pass "seeded sites.json is empty ({\"hosts\": {}} + _doc), not a copy of the bundled one" || fail "seed hosts key" "$n"
+case "$(uname -s)" in MINGW*|MSYS*|CYGWIN*) pass "env file mode check skipped on Windows";;
+  *) m=$(ls -l "$SH/.config/web-unlock/env" | cut -c1-10)
+     [ "$m" = "-rw-------" ] && pass "seeded env file is private (600)" || fail "env mode" "$m";; esac
+# existing files: byte-identical afterwards
+printf '{"hosts":{"mine.example":{"route":"http"}}}\n' > "$SH/.config/web-unlock/sites.json"
+printf 'EXA_API_KEY=%s\n' "$DUMMY" > "$SH/.config/web-unlock/env"
+cp "$SH/.config/web-unlock/sites.json" "$T/sites.before"; cp "$SH/.config/web-unlock/env" "$T/env.before"
+out=$(env -u WEB_UNLOCK_HOME HOME="$SH" USERPROFILE="$SH" "$NODE" "$SEED" 2>&1); rc=$?
+[ $rc -eq 0 ] && [ -z "$out" ] && cmp -s "$T/sites.before" "$SH/.config/web-unlock/sites.json" && cmp -s "$T/env.before" "$SH/.config/web-unlock/env" \
+  && pass "existing sites.json and env are byte-identical after a seed" || fail "seed keeps" "rc=$rc $out"
+out=$(WEB_UNLOCK_HOME="$SH/.config/web-unlock" uc --init); rc=$?
+[ $rc -eq 0 ] && [[ "$out" == *"kept "*"sites.json"* ]] && cmp -s "$T/sites.before" "$SH/.config/web-unlock/sites.json" \
+  && pass "--init says kept and leaves the file alone" || fail "init kept" "$out"
+# env overrides: WEB_UNLOCK_HOME, WEB_UNLOCK_ENV, WEB_UNLOCK_SITES
+SH2="$T/seedhome2"; mkdir -p "$SH2"
+out=$(HOME="$SH2" USERPROFILE="$SH2" WEB_UNLOCK_HOME="$T/override" "$NODE" "$SEED" 2>&1); rc=$?
+[ $rc -eq 0 ] && [ -f "$T/override/sites.json" ] && [ -f "$T/override/env" ] && [ ! -e "$SH2/.config" ] \
+  && pass "WEB_UNLOCK_HOME is respected (nothing under ~/.config)" || fail "seed override" "rc=$rc $out"
+out=$(HOME="$SH2" USERPROFILE="$SH2" WEB_UNLOCK_HOME="$T/override2" WEB_UNLOCK_ENV="$T/keys/web.env" WEB_UNLOCK_SITES="$T/sites.json" "$NODE" "$SEED" 2>&1); rc=$?
+[ $rc -eq 0 ] && [ -f "$T/keys/web.env" ] && [ ! -e "$T/override2/env" ] && [ ! -e "$T/override2/sites.json" ] \
+  && pass "WEB_UNLOCK_ENV and WEB_UNLOCK_SITES are respected" || fail "seed env/sites override" "rc=$rc $out"
+# cannot write: never crashes, never prints
+printf 'x' > "$T/afile2"
+out=$(HOME="$SH2" USERPROFILE="$SH2" WEB_UNLOCK_HOME="$(wp "$T/afile2")/sub" "$NODE" "$SEED" 2>&1); rc=$?
+[ $rc -eq 0 ] && [ -z "$out" ] && pass "folder that cannot be created (path under a file) -> exit 0, no output" || fail "seed unwritable" "rc=$rc $out"
+mkdir -p "$T/rel"
+out=$(cd "$T/rel" && HOME="$SH2" USERPROFILE="$SH2" WEB_UNLOCK_HOME="relhome" "$NODE" "$SEED" 2>&1); rc=$?
+[ $rc -eq 0 ] && [ -z "$out" ] && [ -z "$(ls -A "$T/rel")" ] && pass "relative WEB_UNLOCK_HOME is not seeded into the current folder" || fail "seed relative" "rc=$rc $out $(ls -A "$T/rel")"
+mkdir -p "$T/ro"; chmod 555 "$T/ro"
+if [ -w "$T/ro" ]; then pass "read-only folder check skipped: this user can write anyway (root or Windows)"
+else
+  out=$(HOME="$SH2" USERPROFILE="$SH2" WEB_UNLOCK_HOME="$T/ro/web-unlock" "$NODE" "$SEED" 2>&1); rc=$?
+  [ $rc -eq 0 ] && [ -z "$out" ] && [ ! -e "$T/ro/web-unlock" ] && pass "read-only parent folder -> exit 0, no output" || fail "seed readonly" "rc=$rc $out"
+fi
+chmod 755 "$T/ro"
+# WEB_UNLOCK_SITES set in the env file (not the environment) also means "no copy here", as user-config.sh reads it
+SH3="$T/seedhome3"; mkdir -p "$SH3/.config/web-unlock"
+printf '# mine\nexport WEB_UNLOCK_SITES="$HOME/shared/sites.json"\n' > "$SH3/.config/web-unlock/env"
+out=$(env -u WEB_UNLOCK_HOME -u WEB_UNLOCK_SITES HOME="$SH3" USERPROFILE="$SH3" "$NODE" "$SEED" 2>&1); rc=$?
+[ $rc -eq 0 ] && [ ! -e "$SH3/.config/web-unlock/sites.json" ] && [ -d "$SH3/.config/web-unlock/references" ] \
+  && pass "WEB_UNLOCK_SITES in the env file: the hook does not copy the registry" || fail "seed sites from env file" "rc=$rc $out $(ls -A "$SH3/.config/web-unlock")"
+# a write that fails half-way (disk full) leaves no empty file behind; the next run seeds it whole
+SH4="$T/seedhome4"; mkdir -p "$SH4"
+FAILW="data:text/javascript,import fs from 'node:fs'; fs.writeSync = () => { throw Object.assign(new Error('no space'), { code: 'ENOSPC' }); };"
+out=$(env -u WEB_UNLOCK_HOME HOME="$SH4" USERPROFILE="$SH4" "$NODE" --import "$FAILW" "$SEED" 2>&1); rc=$?
+[ $rc -eq 0 ] && [ ! -e "$SH4/.config/web-unlock/sites.json" ] && [ ! -e "$SH4/.config/web-unlock/env" ] \
+  && pass "failed write -> no empty sites.json or env left behind" || fail "seed failed write" "rc=$rc $out $(ls -A "$SH4/.config/web-unlock" 2>&1)"
+env -u WEB_UNLOCK_HOME HOME="$SH4" USERPROFILE="$SH4" "$NODE" "$SEED"
+cmp -s "$SH4/.config/web-unlock/env" "$SK/env.default" && cmp -s "$SH4/.config/web-unlock/sites.json" "$SK/sites.starter.json" \
+  && pass "and the next run seeds both files whole" || fail "seed after failed write"
+# the seeded folder behaves exactly like no folder at all (only the registry's path in messages differs)
+NOF="$T/nofolder"; SEEDED="$T/seededfolder"
+WEB_UNLOCK_HOME="$SEEDED" "$NODE" "$SEED"
+same=1; diffs=""
+[ -f "$SEEDED/sites.json" ] && [ -f "$SEEDED/env" ] || { same=0; diffs="seed did not write $SEEDED"; }
+for u in https://www.reddit.com/r/x https://blocked.example.com/z https://youtube.com/watch?v=1; do
+  a=$(WEB_UNLOCK_HOME="$NOF" FAKE_L0_BODY="$CF" FAKE_JINA_BODY="$RTE" fetch "$u" 2>&1 | sed -e "s#$NOF#H#g" -e "s#$SK/sites.json#H/sites.json#g")
+  b=$(WEB_UNLOCK_HOME="$SEEDED" FAKE_L0_BODY="$CF" FAKE_JINA_BODY="$RTE" fetch "$u" 2>&1 | sed "s#$SEEDED#H#g")
+  [ "$a" = "$b" ] || { same=0; diffs="$diffs | fetch $u: [$a] vs [$b]"; }
+done
+a=$(WEB_UNLOCK_HOME="$NOF" SERPER_API_KEY="$DUMMY" FAKE_SERPER_BODY="$T/serper.json" search "q" 2>&1)
+b=$(WEB_UNLOCK_HOME="$SEEDED" SERPER_API_KEY="$DUMMY" FAKE_SERPER_BODY="$T/serper.json" search "q" 2>&1)
+[ "$a" = "$b" ] || { same=0; diffs="$diffs | search: [$a] vs [$b]"; }
+a=$(WEB_UNLOCK_HOME="$NOF" CHROME_REAL_PORT=1 CHROME_REAL_PROFILE="$T/prof" env PATH="$P" bash "$SK/bin/chrome-real.sh" status 2>&1)
+b=$(WEB_UNLOCK_HOME="$SEEDED" CHROME_REAL_PORT=1 CHROME_REAL_PROFILE="$T/prof" env PATH="$P" bash "$SK/bin/chrome-real.sh" status 2>&1)
+[ "$a" = "$b" ] || { same=0; diffs="$diffs | chrome-real: [$a] vs [$b]"; }
+[ ! -e "$NOF" ] || { same=0; diffs="$diffs | fetch/search created $NOF"; }
+[ $same = 1 ] && pass "seeded defaults behave like no folder (fetch.sh on registry hosts, search.sh, chrome-real.sh)" || fail "seeded = none" "$diffs"
+# the plugin hook points at this script
+"$PY" - "$ROOT/hooks/hooks.json" "$ROOT" <<'PYEOF' && pass "hooks/hooks.json: a SessionStart hook runs lib/seed.mjs with node" || fail "hooks.json"
+import json, os, sys
+h = json.load(open(sys.argv[1], encoding="utf-8"))["hooks"]["SessionStart"][0]["hooks"][0]
+assert h["command"] == "node", h
+f = h["args"][0].replace("${CLAUDE_PLUGIN_ROOT}", sys.argv[2])
+assert os.path.isfile(f), f
+PYEOF
+
+echo "== registry overlay (bundled first, yours on top) =="
+# a fake bundled skill so a "plugin update" can be simulated without touching the real one
+FS="$T/fakeskill"; mkdir -p "$FS"; cp -R "$SK/bin" "$SK/lib" "$FS/"
+printf '{"hosts":{"bundled.example":{"route":"http","how":"bundled-only"},"both.example":{"route":"http","how":"bundled-entry","tags":["x"]},"alias.example":{"alias_of":"bundled.example"}}}\n' > "$FS/sites.json"
+cp "$SK/sites.starter.json" "$FS/"
+OV="$T/overlay"; mkdir -p "$OV"
+printf '{"hosts":{"mine.example":{"route":"browser-real","how":"user-only"},"both.example":{"route":"api","how":"user-entry"}}}\n' > "$OV/sites.json"
+lk() { WEB_UNLOCK_HOME="$OV" env PATH="$P" bash "$FS/bin/sites" "$1" 2>&1; }
+[[ "$(lk mine.example)" == *'"how": "user-only"'* ]] && pass "overlay: a host only in your file is found" || fail "overlay user-only" "$(lk mine.example)"
+[[ "$(lk https://www.bundled.example/x)" == *'"how": "bundled-only"'* ]] && pass "overlay: a host only in the bundled file is found" || fail "overlay bundled-only" "$(lk bundled.example)"
+out=$(lk both.example)
+[[ "$out" == *'"how": "user-entry"'* ]] && [[ "$out" != *bundled-entry* ]] && [[ "$out" != *tags* ]] \
+  && pass "overlay: same host in both -> your whole entry wins (no bundled fields mixed in)" || fail "overlay both" "$out"
+[[ "$(lk alias.example)" == *'"how": "bundled-only"'* ]] && pass "overlay: alias_of is followed in the merged view" || fail "overlay alias" "$(lk alias.example)"
+out=$(WEB_UNLOCK_HOME="$OV" FAKE_L0_BODY="$CF" FAKE_JINA_BODY="$RTE" env PATH="$P" bash "$FS/bin/fetch.sh" https://bundled.example/x 2>&1)
+[[ "$out" == *"known route for bundled.example -> http: bundled-only"* ]] && pass "fetch.sh reads the merged view (bundled host)" || fail "fetch overlay bundled" "$out"
+out=$(WEB_UNLOCK_HOME="$OV" FAKE_L0_BODY="$CF" FAKE_JINA_BODY="$RTE" env PATH="$P" bash "$FS/bin/fetch.sh" https://both.example/x 2>&1)
+[[ "$out" == *"-> api: user-entry"* ]] && pass "fetch.sh reads the merged view (your entry wins)" || fail "fetch overlay both" "$out"
+# a seeded user gets a host the next plugin version adds to the bundled file
+SU="$T/seeduser"; WEB_UNLOCK_HOME="$SU" "$NODE" "$FS/lib/seed.mjs"
+cmp -s "$SU/sites.json" "$FS/sites.starter.json" || fail "overlay seed" "not seeded from the starter"
+printf '{"hosts":{"new-in-update.example":{"route":"fetch-render","how":"added later"}}}\n' > "$FS/sites.json"
+[[ "$(WEB_UNLOCK_HOME="$SU" env PATH="$P" bash "$FS/bin/sites" new-in-update.example)" == *'"how": "added later"'* ]] \
+  && pass "overlay: a bundled update reaches a seeded user" || fail "overlay update" "$(WEB_UNLOCK_HOME="$SU" bash "$FS/bin/sites" new-in-update.example)"
+# an old user file that is a full copy of the bundled registry keeps working: it overrides what it lists
+cp "$SK/sites.json" "$T/fullcopy.json"
+first=$("$PY" -c 'import json,sys; print(next(k for k in json.load(open(sys.argv[1],encoding="utf-8"))["hosts"] if not k.startswith("_")))' "$SK/sites.json")
+out=$(WEB_UNLOCK_SITES="$T/fullcopy.json" env PATH="$P" bash "$SK/bin/sites" "$first")
+[ -n "$out" ] && pass "overlay: a full copy of the bundled file still works ($first found)" || fail "overlay full copy" "$out"
+out=$(WEB_UNLOCK_HOME="$OV" env PATH="$P" bash "$FS/bin/user-config.sh")
+[[ "$out" == *"(2 hosts, from your folder; 3 with the bundled ones)"* ]] && pass "user-config.sh shows your hosts and the merged count" || fail "overlay count" "$out"
+
 echo "== chrome-real.sh / cdp.mjs =="
 out=$(env PATH="$P" CHROME_REAL_PORT=1 CHROME_REAL_PROFILE="$T/prof" bash "$SK/bin/chrome-real.sh" status 2>&1)
 [[ "$out" == stopped* ]] && pass "status with nothing running -> stopped" || fail "status" "$out"
@@ -172,6 +394,14 @@ out=$(env PATH="$P" bash "$SK/bin/chrome-real.sh" bogus 2>&1); rc=$?
 [ $rc -eq 2 ] && pass "unknown subcommand -> usage, exit 2" || fail "bogus subcommand" "$out"
 out=$(cd "$T" && env PATH="$P" PLAYWRIGHT_CORE_PATH="$T/none/" "$NODE" "$SK/bin/cdp.mjs" https://a.example --port 1 2>&1); rc=$?
 { [ $rc -eq 3 ] || [ $rc -eq 4 ]; } && pass "cdp.mjs exits cleanly with no playwright or no Chrome (rc=$rc)" || fail "cdp.mjs" "$out"
+# cdp.mjs takes CHROME_REAL_PORT and PLAYWRIGHT_CORE_PATH from your env file too, like chrome-real.sh does
+mkdir -p "$T/fakepw/node_modules/playwright-core" "$T/cdpenv"
+printf 'module.exports = { chromium: { connectOverCDP() { throw new Error("not reached"); } } };\n' > "$T/fakepw/node_modules/playwright-core/index.js"
+printf 'CHROME_REAL_PORT=1\nPLAYWRIGHT_CORE_PATH="%s/"  # fake\n' "$(wp "$T/fakepw")" > "$T/cdpenv/env"
+out=$(cd "$T" && env -u CHROME_REAL_PORT -u PLAYWRIGHT_CORE_PATH PATH="$P" WEB_UNLOCK_HOME="$(wp "$T/cdpenv")" "$NODE" "$SK/bin/cdp.mjs" https://a.example 2>&1); rc=$?
+[ $rc -eq 4 ] && [[ "$out" == *"on port 1:"* ]] && pass "cdp.mjs reads CHROME_REAL_PORT and PLAYWRIGHT_CORE_PATH from the env file" || fail "cdp env file" "rc=$rc $out"
+out=$(cd "$T" && env PATH="$P" CHROME_REAL_PORT=2 WEB_UNLOCK_HOME="$(wp "$T/cdpenv")" "$NODE" "$SK/bin/cdp.mjs" https://a.example 2>&1); rc=$?
+[[ "$out" == *"on port 2:"* ]] && pass "cdp.mjs: the environment wins over the env file" || fail "cdp env wins" "rc=$rc $out"
 
 echo "== install.sh =="
 out=$(bash "$ROOT/install.sh" --dry-run 2>&1); rc=$?

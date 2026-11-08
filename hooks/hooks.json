@@ -1,0 +1,12 @@
+{
+  "description": "Creates your own settings folder (~/.config/web-unlock) on first run. Silent; never overwrites a file.",
+  "hooks": {
+    "SessionStart": [
+      {
+        "hooks": [
+          { "type": "command", "command": "node", "args": ["${CLAUDE_PLUGIN_ROOT}/skills/web-unlock/lib/seed.mjs"], "timeout": 10 }
+        ]
+      }
+    ]
+  }
+}

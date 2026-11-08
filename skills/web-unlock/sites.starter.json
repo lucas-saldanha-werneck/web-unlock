@@ -1,0 +1,4 @@
+{
+  "_doc": "Your site registry: host -> what worked. It starts empty. It is laid OVER the plugin's bundled sites.json: the bundled hosts come first, then yours; a host listed here replaces the bundled entry for that host, whole. So new bundled hosts from plugin updates still reach you. Same format as the bundled file (see its _doc): tags, route, how, verified, alias_of. Claude records new routes here.",
+  "hosts": {}
+}

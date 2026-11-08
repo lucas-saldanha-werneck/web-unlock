@@ -1,0 +1,1 @@
+{"ok": true, "msg": "Pedido recebido. Se falhar, tente novamente mais tarde.", "hint": "Ocorreu um erro de rede? Tente de novo."}

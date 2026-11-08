@@ -8,7 +8,10 @@
 # The page body always goes to a file, never to the terminal.
 # Exit code: 0 = OK, 2 = blocked, 1 = usage error.
 set -uo pipefail
-HERE="$(cd "$(dirname "$0")" && pwd)"; SKILL="$(dirname "$HERE")"
+# Find this script's real folder, following symlinks (readlink without -f works on macOS bash 3.2 too).
+_self="$0"; _n=0
+while [ -L "$_self" ] && [ $_n -lt 40 ]; do _n=$((_n+1)); _l="$(readlink "$_self")"; case "$_l" in /*) _self="$_l";; *) _self="$(dirname "$_self")/$_l";; esac; done
+HERE="$(cd "$(dirname "$_self")" && pwd)"; SKILL="$(dirname "$HERE")"
 usage() { echo "usage: fetch.sh <url> [-o output] [--start L0|L1|L2] [--stop L0|L1|L2]"; }
 case "${1:-}" in ""|-h|--help) usage; [ -n "${1:-}" ] && exit 0; exit 1;; esac
 URL="$1"; shift
@@ -17,13 +20,12 @@ while [ $# -gt 0 ]; do case "$1" in
   -o) OUT="$2"; shift 2;; --start) START="$2"; shift 2;; --stop) STOP="$2"; shift 2;;
   *) echo "fetch.sh: unknown option $1" >&2; usage >&2; exit 1;; esac; done
 
-# Optional keys file (JINA_API_KEY, BRIGHTDATA_API_KEY, BRIGHTDATA_UNLOCKER_ZONE, ...). Never required.
-ENV_FILE="${WEB_UNLOCK_ENV:-$HOME/.config/web-unlock/env}"
-[ -f "$ENV_FILE" ] && { set -a; . "$ENV_FILE"; set +a; }
-# Sites registry: $WEB_UNLOCK_SITES, else your own copy in ~/.config/web-unlock, else the bundled example.
-SITES="${WEB_UNLOCK_SITES:-}"
-[ -z "$SITES" ] && [ -f "$HOME/.config/web-unlock/sites.json" ] && SITES="$HOME/.config/web-unlock/sites.json"
-[ -z "$SITES" ] && SITES="$SKILL/sites.json"
+# Your folder ($WEB_UNLOCK_HOME, default ~/.config/web-unlock): optional env file with keys and settings
+# (JINA_API_KEY, BRIGHTDATA_API_KEY, BRIGHTDATA_UNLOCKER_ZONE, WEB_UNLOCK_*), and your sites.json.
+# shellcheck source=../lib/config.sh
+. "$SKILL/lib/config.sh"
+wu_load_env export
+SITES="$(wu_sites)"
 PY="$(command -v python3 || command -v python || true)"
 command -v node >/dev/null || { echo "BLOCKED none node-missing | fetch.sh needs node on PATH for the block detector"; exit 2; }
 
@@ -69,33 +71,9 @@ if ge L1 "$START" && ge "$STOP" L1; then
   fi
 fi
 
-# L2: unlock. A route that already worked for this host (sites.json), else Bright Data if configured.
+# L2: unlock. A route that already worked for this host (registry: bundled + yours), else Bright Data.
 if ge L2 "$START" && ge "$STOP" L2; then
-  KNOWN=""
-  if [ -n "$PY" ] && [ -f "$SITES" ]; then
-    KNOWN=$("$PY" - "$SITES" "$HOST" <<'EOF' 2>/dev/null
-import json, sys
-try:
-    d = json.load(open(sys.argv[1], encoding="utf-8")).get("hosts", {})
-except Exception:
-    sys.exit(0)
-h = sys.argv[2]; parts = h.split(".")
-keys = []
-for i in range(len(parts) - 1):
-    k = ".".join(parts[i:])
-    keys.append(k)
-    if i > 0:
-        keys.append("*." + k)
-for k in keys:
-    e = d.get(k)
-    if e and e.get("alias_of"):
-        e = d.get(e["alias_of"])
-    if e and e.get("route"):
-        print("%s: %s" % (e["route"], e.get("how", "")))
-        break
-EOF
-)
-  fi
+  KNOWN=$(wu_registry route "$HOST" 2>/dev/null)  # the bundled registry with yours on top
   if [ -n "$KNOWN" ]; then
     echo "BLOCKED $LAST ${REASON:-blocked} | L2: use the known route for $HOST -> $KNOWN"; exit 2
   fi
@@ -106,7 +84,7 @@ EOF
       -d "{\"zone\":\"$BRIGHTDATA_UNLOCKER_ZONE\",\"url\":\"$URL\",\"format\":\"raw\",\"data_format\":\"markdown\"}" 2>/dev/null
     if [ -s "$f" ] && check "$f"; then cp "$f" "$OUT"; echo "OK L2-brightdata $OUT $(size "$f")"; exit 0; fi
   else
-    echo "BLOCKED $LAST ${REASON:-blocked} | L2 unavailable: no route for $HOST in $SITES and no BRIGHTDATA_API_KEY/BRIGHTDATA_UNLOCKER_ZONE in $ENV_FILE. Next: a site-specific scraper or API, or a real headed browser (bin/chrome-real.sh + bin/cdp.mjs)."; exit 2
+    echo "BLOCKED $LAST ${REASON:-blocked} | L2 unavailable: no route for $HOST in the registry ($SITES over the bundled one) and no BRIGHTDATA_API_KEY/BRIGHTDATA_UNLOCKER_ZONE in $ENV_FILE. Next: a site-specific scraper or API, or a real headed browser (bin/chrome-real.sh + bin/cdp.mjs)."; exit 2
   fi
 fi
 echo "BLOCKED $LAST ${REASON:-blocked}"; exit 2
