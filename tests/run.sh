@@ -17,7 +17,7 @@ T="$(mktemp -d 2>/dev/null || mktemp -d -t webunlock)"
 trap 'rm -rf "$T"' EXIT
 export HOME="$T/home" USERPROFILE="$T/home" TMPDIR="$T/tmp" WEB_UNLOCK_TMP="$T/tmp/web-unlock"
 mkdir -p "$HOME" "$TMPDIR"
-unset CLAUDE_CONFIG_DIR WEB_UNLOCK_SITES WEB_UNLOCK_ENV EXA_API_KEY SERPER_API_KEY JINA_API_KEY BRIGHTDATA_API_KEY BRIGHTDATA_UNLOCKER_ZONE
+unset CLAUDE_CONFIG_DIR WEB_UNLOCK_SITES WEB_UNLOCK_ENV WEB_UNLOCK_HOME WEB_UNLOCK_SEARCH_ORDER EXA_API_KEY SERPER_API_KEY JINA_API_KEY BRIGHTDATA_API_KEY BRIGHTDATA_UNLOCKER_ZONE
 DUMMY="dummy-value"   # stands in for an API key; the fakes never check it
 
 # ---------- 1. detector on the samples ----------
@@ -152,6 +152,51 @@ rm -f "$SB/mcporter"
 printf '#!/usr/bin/env bash\ncat "%s"\n' "$S/ok-search-json.txt" > "$SB/tvly"; chmod +x "$SB/tvly"
 out=$(search "q" --provider tavily); rc=$?
 [ $rc -eq 0 ] && [[ "$out" == *'"provider": "tavily"'* ]] && pass "--provider tavily uses the tvly CLI" || fail "tavily" "$out"
+
+out=$(WEB_UNLOCK_SEARCH_ORDER="serper,tavily" SERPER_API_KEY="$DUMMY" FAKE_SERPER_BODY="$T/serper.json" search "q"); rc=$?
+[ $rc -eq 0 ] && [[ "$out" == *'"provider": "serper"'* ]] && [[ "$out" != *tavily* ]] \
+  && pass "WEB_UNLOCK_SEARCH_ORDER puts serper before tavily" || fail "search order" "$out"
+mkdir -p "$HOME/.config/web-unlock"; echo 'WEB_UNLOCK_SEARCH_ORDER="tavily"' > "$HOME/.config/web-unlock/env"
+out=$(SERPER_API_KEY="$DUMMY" FAKE_SERPER_BODY="$T/serper.json" search "q"); rc=$?
+[ $rc -eq 0 ] && [[ "$out" == *'"provider": "tavily"'* ]] && [[ "$out" != *serper* ]] \
+  && pass "settings in the user folder's env file reach search.sh" || fail "env-file order" "$out"
+rm -f "$HOME/.config/web-unlock/env"
+out=$(WEB_UNLOCK_SEARCH_ORDER="bogus" search "q" 2>"$T/err"); rc=$?
+[ $rc -eq 1 ] && grep -q "unknown provider bogus" "$T/err" && pass "unknown provider in WEB_UNLOCK_SEARCH_ORDER -> exit 1 with its name" || fail "bogus order" "$out $(cat "$T/err")"
+
+echo "== user folder (WEB_UNLOCK_HOME, user-config.sh) =="
+uc() { env PATH="$P" bash "$SK/bin/user-config.sh" "$@"; }
+out=$(uc); rc=$?
+[ $rc -eq 0 ] && [[ "$out" == *"home $HOME/.config/web-unlock (exists)"* ]] && [[ "$out" == *"from the bundled example"* ]] \
+  && [[ "$out" != *"rules "* ]] && pass "user-config.sh with an empty folder: bundled registry, no rules" || fail "uc empty" "$out"
+U="$T/mine"
+out=$(WEB_UNLOCK_HOME="$U" uc --init); rc=$?
+[ $rc -eq 0 ] && cmp -s "$U/sites.json" "$SK/sites.json" && [ -d "$U/references" ] && [[ "$out" == *"sites $U/sites.json"*"from your folder"* ]] \
+  && pass "--init seeds WEB_UNLOCK_HOME/sites.json and references/" || fail "uc init" "$out"
+echo '{"hosts":{"a.example":{},"b.example":{}}}' > "$U/sites.json"
+WEB_UNLOCK_HOME="$U" uc --init >/dev/null
+grep -q a.example "$U/sites.json" && pass "--init keeps an existing sites.json" || fail "uc init keeps"
+printf '# my rules\n' > "$U/rules.md"; printf 'x\n' > "$U/references/search-doctrine.md"; printf 'y\n' > "$U/references/mine.md"
+printf 'SECRET_THING=%s\n' "$DUMMY" > "$U/env"
+out=$(WEB_UNLOCK_HOME="$U" uc)
+[[ "$out" == *"rules $U/rules.md"* ]] && pass "rules files in the user folder are listed" || fail "uc rules" "$out"
+[[ "$out" == *"reference $U/references/search-doctrine.md replaces $SK/references/search-doctrine.md"* ]] && [[ "$out" == *"reference $U/references/mine.md"$'\n'* || "$out" == *"reference $U/references/mine.md" ]] \
+  && pass "user references: same name replaces the bundled one, others add" || fail "uc refs" "$out"
+[[ "$out" == *"(2 hosts, from your folder)"* ]] && pass "registry from the user folder, with its host count" || fail "uc sites" "$out"
+[[ "$out" == *"env $U/env (present)"* ]] && [[ "$out" != *"$DUMMY"* ]] && pass "env file reported present, values never printed" || fail "uc env" "$out"
+out=$(WEB_UNLOCK_HOME="$U" WEB_UNLOCK_SITES="$T/sites.json" uc)
+[[ "$out" == *"sites $T/sites.json (3 hosts, from WEB_UNLOCK_SITES)"* ]] && pass "WEB_UNLOCK_SITES wins over the user folder" || fail "uc env sites" "$out"
+cp "$T/sites.json" "$U/sites.json"
+out=$(WEB_UNLOCK_HOME="$U" FAKE_L0_BODY="$CF" FAKE_JINA_BODY="$RTE" fetch https://example.com/x)
+[[ "$out" == *"fetch-unlock"* ]] && pass "fetch.sh reads the registry in WEB_UNLOCK_HOME" || fail "fetch home" "$out"
+printf '%s=%s\n' BRIGHTDATA_API_KEY "$DUMMY" BRIGHTDATA_UNLOCKER_ZONE zone1 > "$U/env"
+out=$(WEB_UNLOCK_HOME="$U" FAKE_L0_BODY="$CF" FAKE_JINA_BODY="$RTE" FAKE_BD_BODY="$GOODMD" fetch https://blocked.test/e); rc=$?
+[ $rc -eq 0 ] && [[ "$out" == "OK L2-brightdata "* ]] && pass "fetch.sh loads keys from WEB_UNLOCK_HOME/env" || fail "fetch home env" "$out"
+echo "CHROME_REAL_PORT=9222" > "$U/env"
+out=$(WEB_UNLOCK_HOME="$U" CHROME_REAL_PROFILE="$T/prof" env PATH="$P" bash "$SK/bin/chrome-real.sh" status 2>&1)
+[[ "$out" == *"WARNING: port 9222"* ]] && pass "chrome-real.sh reads CHROME_REAL_* from the user folder's env file" || fail "chrome env" "$out"
+out=$(uc --bogus 2>&1); rc=$?
+[ $rc -eq 1 ] && pass "user-config.sh unknown option -> exit 1" || fail "uc bogus" "$out"
 
 echo "== chrome-real.sh / cdp.mjs =="
 out=$(env PATH="$P" CHROME_REAL_PORT=1 CHROME_REAL_PROFILE="$T/prof" bash "$SK/bin/chrome-real.sh" status 2>&1)

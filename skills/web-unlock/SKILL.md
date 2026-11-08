@@ -18,14 +18,26 @@ browsers on Cloudflare sites, and `--remote-debugging-port` without `--user-data
 follow its message; it names the next layer.
 
 Paths below are relative to this skill's base directory (the folder that holds this SKILL.md): `bin/`,
-`lib/detect.mjs`, `sites.json`, `references/`. Optional API keys live in `~/.config/web-unlock/env`
-(or the file in `$WEB_UNLOCK_ENV`). Every key and every external tool is optional; each script says what it
-skipped.
+`lib/detect.mjs`, `sites.json`, `references/`. Every key and every external tool is optional; each script says
+what it skipped.
+
+## Before anything: the user's own folder
+Run `bin/user-config.sh` once per task. It prints the user's settings folder (`~/.config/web-unlock`, or
+`$WEB_UNLOCK_HOME`), which lives outside this plugin so updates never overwrite it:
+- `rules <file>`: the user's own rules (accounts and sites they log into, tools they have, their language,
+  extra steps). **Read every rules file before going on. Where it disagrees with this file, the user's file
+  wins.**
+- `reference <file> [replaces <bundled file>]`: the user's reference notes. Read one instead of the bundled
+  file it replaces; the others add to `references/`.
+- `sites <file>`: the registry in use (step 0 below).
+- `env <file>`: API keys and settings that the scripts load by themselves. Never print it.
+
+If the folder is missing, carry on with this file alone.
 
 ## 0. First: check `sites.json`
-Look up the host in the registry: `$WEB_UNLOCK_SITES`, else `~/.config/web-unlock/sites.json`, else the
-bundled `sites.json`. Keys match the host, its parent domains and `*.domain`. If the host has a `route`, go
-straight to it. If `route` is `null`, the `how` field says what already failed: do not repeat it.
+Look up the host in the registry from the `sites` line above (`$WEB_UNLOCK_SITES`, else the user's folder,
+else the bundled example). Keys match the host, its parent domains and `*.domain`. If the host has a `route`,
+go straight to it. If `route` is `null`, the `how` field says what already failed: do not repeat it.
 
 ## P1. Search (when the normal search came back thin)
 | | Tool | When |
@@ -103,5 +115,5 @@ browser with stealth and proxy (needs the provider's key).
 
 ## When you finish a web task
 A new route worked or failed -> update the user's `sites.json` (host, tags, route, how, verified = date).
-Without that the next session rediscovers it. Write to `~/.config/web-unlock/sites.json` (copy the bundled
-file there first if it does not exist), not to the plugin folder, which updates overwrite.
+Without that the next session rediscovers it. Write to the `sites.json` in the user's folder (run
+`bin/user-config.sh --init` first if it does not exist), never to the plugin folder, which updates overwrite.

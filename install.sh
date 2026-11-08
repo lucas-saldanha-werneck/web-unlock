@@ -8,7 +8,7 @@ set -euo pipefail
 HERE="$(cd "$(dirname "$0")" && pwd)"
 SRC="$HERE/skills/web-unlock"
 DST="${CLAUDE_CONFIG_DIR:-$HOME/.claude}/skills/web-unlock"
-CFG="$HOME/.config/web-unlock"
+CFG="${WEB_UNLOCK_HOME:-$HOME/.config/web-unlock}"
 DRY=0; UNINSTALL=0
 for a in "$@"; do case "$a" in
   --dry-run) DRY=1;; --uninstall) UNINSTALL=1;;
@@ -30,7 +30,7 @@ run mkdir -p "$(dirname "$DST")"
 run rm -rf "$DST"
 run cp -R "$SRC" "$DST"
 [ $DRY = 1 ] || touch "$DST/.installed-by-web-unlock"
-run chmod +x "$DST/bin/fetch.sh" "$DST/bin/search.sh" "$DST/bin/chrome-real.sh" "$DST/bin/blocked" "$DST/bin/cdp.mjs"
+run chmod +x "$DST/bin/fetch.sh" "$DST/bin/search.sh" "$DST/bin/chrome-real.sh" "$DST/bin/blocked" "$DST/bin/cdp.mjs" "$DST/bin/user-config.sh"
 echo "skill: $DST"
 if [ -f "$CFG/sites.json" ]; then
   echo "registry: kept your $CFG/sites.json"

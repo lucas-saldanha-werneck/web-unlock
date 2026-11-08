@@ -25,6 +25,9 @@
 # Then: node bin/cdp.mjs <url> --title  |  playwright connectOverCDP('http://127.0.0.1:9223')  |  agent-browser --cdp 9223 ...
 # Platforms: macOS and Linux. Windows is not supported by this script.
 set -uo pipefail
+HERE="$(cd "$(dirname "$0")" && pwd)"; SKILL="$(dirname "$HERE")"
+# shellcheck source=../lib/config.sh
+. "$SKILL/lib/config.sh"   # CHROME_REAL_* can live in the env file of your folder (~/.config/web-unlock/env)
 OS="$(uname -s 2>/dev/null || echo unknown)"
 DST="${CHROME_REAL_PROFILE:-$HOME/.chrome-automation-profile}"
 PORT="${CHROME_REAL_PORT:-9223}"

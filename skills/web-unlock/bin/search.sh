@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 # web-unlock: web search with failover between providers. Normalized output, one JSON object per line:
 #   {"provider":..,"title":..,"url":..,"snippet":..}
-# Default order (each one is skipped when it is not available):
+# Default order (each one is skipped when it is not available; WEB_UNLOCK_SEARCH_ORDER changes it,
+# e.g. "serper exa-mcp" — space or comma separated, providers left out are not tried):
 #   exa-mcp   free Exa MCP endpoint through `mcporter` (no key)
 #   exa       Exa API            (needs EXA_API_KEY)
 #   serper    Google results     (needs SERPER_API_KEY)
@@ -18,8 +19,9 @@ N=5; PROV=auto; GL=""; HL=""
 while [ $# -gt 0 ]; do case "$1" in
   -n) N="$2"; shift 2;; --provider) PROV="$2"; shift 2;; --gl) GL="$2"; shift 2;; --hl) HL="$2"; shift 2;;
   *) echo "search.sh: unknown option $1" >&2; usage >&2; exit 1;; esac; done
-ENV_FILE="${WEB_UNLOCK_ENV:-$HOME/.config/web-unlock/env}"
-[ -f "$ENV_FILE" ] && { set -a; . "$ENV_FILE"; set +a; }
+HERE="$(cd "$(dirname "$0")" && pwd)"; SKILL="$(dirname "$HERE")"
+# shellcheck source=../lib/config.sh
+. "$SKILL/lib/config.sh"   # env file in your folder: keys, WEB_UNLOCK_SEARCH_ORDER
 PY="$(command -v python3 || command -v python || true)"
 export PYTHONIOENCODING=utf-8
 [ -n "$PY" ] || { echo '{"error":"search.sh needs python3 on PATH"}' >&2; exit 1; }
@@ -76,7 +78,8 @@ try_firecrawl() { command -v firecrawl >/dev/null || return 1
   firecrawl search "$Q" --limit "$N" --json -o "$F" >/dev/null 2>&1 && norm firecrawl "$F"; }
 run() { case "$1" in exa-mcp) try_exa_mcp;; exa) try_exa;; serper) try_serper;; tavily) try_tavily;; firecrawl) try_firecrawl;;
   *) echo "search.sh: unknown provider $1" >&2; return 1;; esac; }
-ALL="exa-mcp exa serper tavily firecrawl"
+ALL="${WEB_UNLOCK_SEARCH_ORDER:-exa-mcp exa serper tavily firecrawl}"
+ALL="$(printf '%s' "$ALL" | tr ',' ' ')"
 if [ "$PROV" = all ]; then ok=1; for p in $ALL; do run "$p" && ok=0; done; exit $ok; fi
 if [ "$PROV" != auto ]; then run "$PROV"; exit $?; fi
 for p in $ALL; do run "$p" && exit 0; done

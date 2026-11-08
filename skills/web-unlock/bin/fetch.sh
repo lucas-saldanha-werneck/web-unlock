@@ -17,13 +17,11 @@ while [ $# -gt 0 ]; do case "$1" in
   -o) OUT="$2"; shift 2;; --start) START="$2"; shift 2;; --stop) STOP="$2"; shift 2;;
   *) echo "fetch.sh: unknown option $1" >&2; usage >&2; exit 1;; esac; done
 
-# Optional keys file (JINA_API_KEY, BRIGHTDATA_API_KEY, BRIGHTDATA_UNLOCKER_ZONE, ...). Never required.
-ENV_FILE="${WEB_UNLOCK_ENV:-$HOME/.config/web-unlock/env}"
-[ -f "$ENV_FILE" ] && { set -a; . "$ENV_FILE"; set +a; }
-# Sites registry: $WEB_UNLOCK_SITES, else your own copy in ~/.config/web-unlock, else the bundled example.
-SITES="${WEB_UNLOCK_SITES:-}"
-[ -z "$SITES" ] && [ -f "$HOME/.config/web-unlock/sites.json" ] && SITES="$HOME/.config/web-unlock/sites.json"
-[ -z "$SITES" ] && SITES="$SKILL/sites.json"
+# Your folder ($WEB_UNLOCK_HOME, default ~/.config/web-unlock): optional env file with keys and settings
+# (JINA_API_KEY, BRIGHTDATA_API_KEY, BRIGHTDATA_UNLOCKER_ZONE, WEB_UNLOCK_*), and your sites.json.
+# shellcheck source=../lib/config.sh
+. "$SKILL/lib/config.sh"
+SITES="$(wu_sites)"
 PY="$(command -v python3 || command -v python || true)"
 command -v node >/dev/null || { echo "BLOCKED none node-missing | fetch.sh needs node on PATH for the block detector"; exit 2; }
 
