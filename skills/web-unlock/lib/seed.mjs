@@ -26,12 +26,14 @@ function seedFile(src, dst, mode) {
   let fd;
   try {
     const data = fs.readFileSync(src);
-    fs.mkdirSync(path.dirname(dst), { recursive: true });
-    fd = fs.openSync(dst, 'wx', mode);
+    fs.mkdirSync(path.dirname(dst), { recursive: true });  // a file in the way throws: a failure, not "kept"
+    try { fd = fs.openSync(dst, 'wx', mode); } catch (e) {
+      if (e && e.code === 'EEXIST') { say(`kept ${dst}`); return true; }
+      throw e;
+    }
     fs.writeSync(fd, data);
     say(`seeded ${dst}`);
   } catch (e) {
-    if (e && e.code === 'EEXIST') { say(`kept ${dst}`); return true; }
     if (verbose) process.stderr.write(`seed: could not create ${dst}: ${e && e.message}\n`);
     return false;
   } finally {
