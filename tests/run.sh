@@ -19,6 +19,9 @@ export HOME="$T/home" USERPROFILE="$T/home" TMPDIR="$T/tmp" WEB_UNLOCK_TMP="$T/t
 mkdir -p "$HOME" "$TMPDIR"
 unset CLAUDE_CONFIG_DIR WEB_UNLOCK_SITES WEB_UNLOCK_ENV WEB_UNLOCK_HOME WEB_UNLOCK_SEARCH_ORDER EXA_API_KEY SERPER_API_KEY JINA_API_KEY BRIGHTDATA_API_KEY BRIGHTDATA_UNLOCKER_ZONE
 DUMMY="dummy-value"   # stands in for an API key; the fakes never check it
+# A path node sees the same way bash does. Git Bash leaves a /tmp/... path that runs through a regular file
+# unconverted, and node would then read it as C:\tmp\...; the mixed form C:/... works in both.
+wp() { if command -v cygpath >/dev/null 2>&1; then cygpath -m "$1"; else printf '%s' "$1"; fi; }
 
 # ---------- 1. detector on the samples ----------
 echo "== detector =="
@@ -222,7 +225,7 @@ out=$(WEB_UNLOCK_HOME="$H9" env PATH="$P" bash "$SK/bin/user-config.sh")
 [[ "$out" == *"(0 hosts, from your folder)"* ]] && pass "a file without \"hosts\" counts 0, as fetch.sh reads it" || fail "count no hosts" "$out"
 # 7: --init failure is reported, not "seeded"
 printf 'x' > "$T/afile"
-out=$(WEB_UNLOCK_HOME="$T/afile/sub" env PATH="$P" bash "$SK/bin/user-config.sh" --init 2>&1); rc=$?
+out=$(WEB_UNLOCK_HOME="$(wp "$T/afile")/sub" env PATH="$P" bash "$SK/bin/user-config.sh" --init 2>&1); rc=$?
 [ $rc -ne 0 ] && [[ "$out" != *seeded* ]] && pass "--init that cannot create the folder exits non-zero" || fail "init failure" "rc=$rc $out"
 # 4: scripts work through a symlink (skipped where ln -s copies, as on Git Bash)
 mkdir -p "$T/links"; ln -s "$SK/bin/user-config.sh" "$T/links/uc" 2>/dev/null; ln -s "$SK/bin/search.sh" "$T/links/search" 2>/dev/null
@@ -280,7 +283,7 @@ out=$(HOME="$SH2" USERPROFILE="$SH2" WEB_UNLOCK_HOME="$T/override2" WEB_UNLOCK_E
   && pass "WEB_UNLOCK_ENV and WEB_UNLOCK_SITES are respected" || fail "seed env/sites override" "rc=$rc $out"
 # cannot write: never crashes, never prints
 printf 'x' > "$T/afile2"
-out=$(HOME="$SH2" USERPROFILE="$SH2" WEB_UNLOCK_HOME="$T/afile2/sub" "$NODE" "$SEED" 2>&1); rc=$?
+out=$(HOME="$SH2" USERPROFILE="$SH2" WEB_UNLOCK_HOME="$(wp "$T/afile2")/sub" "$NODE" "$SEED" 2>&1); rc=$?
 [ $rc -eq 0 ] && [ -z "$out" ] && pass "folder that cannot be created (path under a file) -> exit 0, no output" || fail "seed unwritable" "rc=$rc $out"
 mkdir -p "$T/ro"; chmod 555 "$T/ro"
 if [ -w "$T/ro" ]; then pass "read-only folder check skipped: this user can write anyway (root or Windows)"
