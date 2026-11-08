@@ -24,6 +24,8 @@ const envFile = env('WEB_UNLOCK_ENV') || path.join(home, 'env');
 // Copy src to dst only if nothing is at dst (O_EXCL: a file, folder or symlink there is left alone).
 function seedFile(src, dst, mode) {
   let fd;
+  // A relative path would land in whatever folder the session runs in: never seed one.
+  if (!path.isAbsolute(dst)) { if (verbose) process.stderr.write(`seed: ${dst} is not an absolute path, not created\n`); return false; }
   try {
     const data = fs.readFileSync(src);
     fs.mkdirSync(path.dirname(dst), { recursive: true });  // a file in the way throws: a failure, not "kept"
@@ -42,8 +44,9 @@ function seedFile(src, dst, mode) {
   return true;
 }
 
-let ok = true;
-try {
+let ok = path.isAbsolute(home);
+if (!ok && verbose) process.stderr.write(`seed: WEB_UNLOCK_HOME ${home} is not an absolute path, not created\n`);
+if (ok) try {
   fs.mkdirSync(path.join(home, 'references'), { recursive: true });
 } catch (e) {
   if (verbose) process.stderr.write(`seed: could not create ${path.join(home, 'references')}: ${e && e.message}\n`);

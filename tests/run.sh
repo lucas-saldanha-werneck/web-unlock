@@ -285,6 +285,9 @@ out=$(HOME="$SH2" USERPROFILE="$SH2" WEB_UNLOCK_HOME="$T/override2" WEB_UNLOCK_E
 printf 'x' > "$T/afile2"
 out=$(HOME="$SH2" USERPROFILE="$SH2" WEB_UNLOCK_HOME="$(wp "$T/afile2")/sub" "$NODE" "$SEED" 2>&1); rc=$?
 [ $rc -eq 0 ] && [ -z "$out" ] && pass "folder that cannot be created (path under a file) -> exit 0, no output" || fail "seed unwritable" "rc=$rc $out"
+mkdir -p "$T/rel"
+out=$(cd "$T/rel" && HOME="$SH2" USERPROFILE="$SH2" WEB_UNLOCK_HOME="relhome" "$NODE" "$SEED" 2>&1); rc=$?
+[ $rc -eq 0 ] && [ -z "$out" ] && [ -z "$(ls -A "$T/rel")" ] && pass "relative WEB_UNLOCK_HOME is not seeded into the current folder" || fail "seed relative" "rc=$rc $out $(ls -A "$T/rel")"
 mkdir -p "$T/ro"; chmod 555 "$T/ro"
 if [ -w "$T/ro" ]; then pass "read-only folder check skipped: this user can write anyway (root or Windows)"
 else
