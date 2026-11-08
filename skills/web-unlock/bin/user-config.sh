@@ -48,7 +48,7 @@ n="?"; m="?"
 if [ "$from" = "the bundled example" ]; then read -r _ m < <(wu_registry count 2>/dev/null); n="$m"
 elif [ -f "$SITES" ]; then
   read -r n m < <(wu_registry count 2>/dev/null)
-  # a file that is there but not a JSON object with "hosts" counts 0 (as fetch.sh reads it): say if unreadable
+  # a file that is there but is not JSON: say so
   PY="$(command -v python3 || command -v python || true)"
   if [ -n "$PY" ] && ! "$PY" -c 'import json,sys; json.load(open(sys.argv[1], encoding="utf-8"))' "$SITES" 2>/dev/null; then n="unreadable"; fi
 fi

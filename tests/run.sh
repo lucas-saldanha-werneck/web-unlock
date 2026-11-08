@@ -222,7 +222,7 @@ out=$(WEB_UNLOCK_HOME="$H9" env PATH="$P" bash "$SK/bin/user-config.sh")
 [[ "$out" == *"(2 hosts, from your folder;"* ]] && pass "host count skips _doc and _ notes" || fail "count notes" "$out"
 echo '{"a.example":{},"b.example":{}}' > "$H9/sites.json"
 out=$(WEB_UNLOCK_HOME="$H9" env PATH="$P" bash "$SK/bin/user-config.sh")
-[[ "$out" == *"(0 hosts, from your folder;"* ]] && pass "a file without \"hosts\" counts 0, as fetch.sh reads it" || fail "count no hosts" "$out"
+[[ "$out" == *"(2 hosts, from your folder;"* ]] && pass "a file without \"hosts\" is a flat host map, as fetch.sh and the guard read it" || fail "count no hosts" "$out"
 # 7: --init failure is reported, not "seeded"
 printf 'x' > "$T/afile"
 out=$(WEB_UNLOCK_HOME="$(wp "$T/afile")/sub" env PATH="$P" bash "$SK/bin/user-config.sh" --init 2>&1); rc=$?

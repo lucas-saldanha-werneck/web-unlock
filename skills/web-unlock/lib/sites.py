@@ -11,7 +11,8 @@ Usage: sites.py <bundled> <yours or ""> merged          the merged registry as J
                                                         (alias_of followed), one JSON line each, with "key"
        sites.py <bundled> <yours or ""> route <host>    "route: how" of the first match with a route (fetch.sh)
        sites.py <bundled> <yours or ""> count           "<yours> <merged>" host counts
-A file that is missing or unreadable counts as empty. Keys starting with "_" are notes, not hosts.
+A file that is missing or unreadable counts as empty; a file without "hosts" is read as a flat host map (as
+web-unlock-guard does). Keys starting with "_" are notes, not hosts.
 """
 import json
 import sys
@@ -25,8 +26,10 @@ def hosts_of(path):
             d = json.load(f)
     except Exception:
         return {}
-    h = d.get("hosts") if isinstance(d, dict) else None
-    return {k: v for k, v in h.items() if not k.startswith("_")} if isinstance(h, dict) else {}
+    if not isinstance(d, dict):
+        return {}
+    h = d["hosts"] if isinstance(d.get("hosts"), dict) else d  # same rule as web-unlock-guard's hostsOf()
+    return {k: v for k, v in h.items() if not k.startswith("_")}
 
 
 def merged(bundled, yours):
