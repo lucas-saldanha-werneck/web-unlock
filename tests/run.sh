@@ -167,8 +167,9 @@ out=$(WEB_UNLOCK_SEARCH_ORDER="bogus" search "q" 2>"$T/err"); rc=$?
 echo "== user folder (WEB_UNLOCK_HOME, user-config.sh) =="
 uc() { env PATH="$P" bash "$SK/bin/user-config.sh" "$@"; }
 out=$(uc); rc=$?
-[ $rc -eq 0 ] && [[ "$out" == *"home $HOME/.config/web-unlock (exists)"* ]] && [[ "$out" == *"from the bundled example"* ]] \
-  && [[ "$out" != *"rules "* ]] && pass "user-config.sh with an empty folder: bundled registry, no rules" || fail "uc empty" "$out"
+[ $rc -eq 0 ] && [[ "$out" == *"home $HOME/.config/web-unlock (exists)"* ]] && [[ "$out" == *"sites $HOME/.config/web-unlock/sites.json"*"from your folder"* ]] \
+  && cmp -s "$HOME/.config/web-unlock/sites.json" "$SK/sites.json" && [[ "$out" != *"rules "* ]] \
+  && pass "user-config.sh on first use seeds the registry quietly; no rules" || fail "uc empty" "$out"
 U="$T/mine"
 out=$(WEB_UNLOCK_HOME="$U" uc --init); rc=$?
 [ $rc -eq 0 ] && cmp -s "$U/sites.json" "$SK/sites.json" && [ -d "$U/references" ] && [[ "$out" == *"sites $U/sites.json"*"from your folder"* ]] \
@@ -244,6 +245,75 @@ rm -f "$SB/ps"
 # 10: install.sh seeds the folder through user-config.sh --init (which also makes references/)
 H10="$T/h10"; out=$(WEB_UNLOCK_HOME="$H10" CLAUDE_CONFIG_DIR="$T/cc10" bash "$ROOT/install.sh" 2>&1); rc=$?
 [ $rc -eq 0 ] && [ -f "$H10/sites.json" ] && [ -d "$H10/references" ] && pass "install.sh seeds through user-config.sh --init" || fail "install init" "rc=$rc $out"
+
+echo "== first-run seed (lib/seed.mjs, SessionStart hook) =="
+SEED="$SK/lib/seed.mjs"
+# what the plugin's hook runs: node seed.mjs, with only HOME set
+SH="$T/seedhome"; mkdir -p "$SH"
+out=$(env -u WEB_UNLOCK_HOME HOME="$SH" USERPROFILE="$SH" "$NODE" "$SEED" </dev/null 2>&1); rc=$?
+[ $rc -eq 0 ] && [ -z "$out" ] && cmp -s "$SH/.config/web-unlock/sites.json" "$SK/sites.json" \
+  && cmp -s "$SH/.config/web-unlock/env" "$SK/env.default" && [ -d "$SH/.config/web-unlock/references" ] \
+  && pass "missing folder -> created with sites.json, env and references/, silently, exit 0" || fail "seed missing" "rc=$rc $out"
+n=$("$PY" -c 'import json,sys; d=json.load(open(sys.argv[1],encoding="utf-8")); print(len([k for k in d["hosts"] if not k.startswith("_")]))' "$SH/.config/web-unlock/sites.json" 2>&1)
+nb=$("$PY" -c 'import json,sys; d=json.load(open(sys.argv[1],encoding="utf-8")); print(len([k for k in d["hosts"] if not k.startswith("_")]))' "$SK/sites.json" 2>&1)
+[ "$n" = "$nb" ] && [ "$n" -gt 0 ] && pass "seeded sites.json keeps the hosts under \"hosts\" ($n hosts)" || fail "seed hosts key" "$n vs $nb"
+case "$(uname -s)" in MINGW*|MSYS*|CYGWIN*) pass "env file mode check skipped on Windows";;
+  *) m=$(ls -l "$SH/.config/web-unlock/env" | cut -c1-10)
+     [ "$m" = "-rw-------" ] && pass "seeded env file is private (600)" || fail "env mode" "$m";; esac
+# existing files: byte-identical afterwards
+printf '{"hosts":{"mine.example":{"route":"http"}}}\n' > "$SH/.config/web-unlock/sites.json"
+printf 'EXA_API_KEY=%s\n' "$DUMMY" > "$SH/.config/web-unlock/env"
+cp "$SH/.config/web-unlock/sites.json" "$T/sites.before"; cp "$SH/.config/web-unlock/env" "$T/env.before"
+out=$(env -u WEB_UNLOCK_HOME HOME="$SH" USERPROFILE="$SH" "$NODE" "$SEED" 2>&1); rc=$?
+[ $rc -eq 0 ] && [ -z "$out" ] && cmp -s "$T/sites.before" "$SH/.config/web-unlock/sites.json" && cmp -s "$T/env.before" "$SH/.config/web-unlock/env" \
+  && pass "existing sites.json and env are byte-identical after a seed" || fail "seed keeps" "rc=$rc $out"
+out=$(WEB_UNLOCK_HOME="$SH/.config/web-unlock" uc --init); rc=$?
+[ $rc -eq 0 ] && [[ "$out" == *"kept "*"sites.json"* ]] && cmp -s "$T/sites.before" "$SH/.config/web-unlock/sites.json" \
+  && pass "--init says kept and leaves the file alone" || fail "init kept" "$out"
+# env overrides: WEB_UNLOCK_HOME, WEB_UNLOCK_ENV, WEB_UNLOCK_SITES
+SH2="$T/seedhome2"; mkdir -p "$SH2"
+out=$(HOME="$SH2" USERPROFILE="$SH2" WEB_UNLOCK_HOME="$T/override" "$NODE" "$SEED" 2>&1); rc=$?
+[ $rc -eq 0 ] && [ -f "$T/override/sites.json" ] && [ -f "$T/override/env" ] && [ ! -e "$SH2/.config" ] \
+  && pass "WEB_UNLOCK_HOME is respected (nothing under ~/.config)" || fail "seed override" "rc=$rc $out"
+out=$(HOME="$SH2" USERPROFILE="$SH2" WEB_UNLOCK_HOME="$T/override2" WEB_UNLOCK_ENV="$T/keys/web.env" WEB_UNLOCK_SITES="$T/sites.json" "$NODE" "$SEED" 2>&1); rc=$?
+[ $rc -eq 0 ] && [ -f "$T/keys/web.env" ] && [ ! -e "$T/override2/env" ] && [ ! -e "$T/override2/sites.json" ] \
+  && pass "WEB_UNLOCK_ENV and WEB_UNLOCK_SITES are respected" || fail "seed env/sites override" "rc=$rc $out"
+# cannot write: never crashes, never prints
+printf 'x' > "$T/afile2"
+out=$(HOME="$SH2" USERPROFILE="$SH2" WEB_UNLOCK_HOME="$T/afile2/sub" "$NODE" "$SEED" 2>&1); rc=$?
+[ $rc -eq 0 ] && [ -z "$out" ] && pass "folder that cannot be created (path under a file) -> exit 0, no output" || fail "seed unwritable" "rc=$rc $out"
+mkdir -p "$T/ro"; chmod 555 "$T/ro"
+if [ -w "$T/ro" ]; then pass "read-only folder check skipped: this user can write anyway (root or Windows)"
+else
+  out=$(HOME="$SH2" USERPROFILE="$SH2" WEB_UNLOCK_HOME="$T/ro/web-unlock" "$NODE" "$SEED" 2>&1); rc=$?
+  [ $rc -eq 0 ] && [ -z "$out" ] && [ ! -e "$T/ro/web-unlock" ] && pass "read-only parent folder -> exit 0, no output" || fail "seed readonly" "rc=$rc $out"
+fi
+chmod 755 "$T/ro"
+# the seeded folder behaves exactly like no folder at all (only the registry's path in messages differs)
+NOF="$T/nofolder"; SEEDED="$T/seededfolder"
+WEB_UNLOCK_HOME="$SEEDED" "$NODE" "$SEED"
+same=1; diffs=""
+for u in https://www.reddit.com/r/x https://blocked.example.com/z https://youtube.com/watch?v=1; do
+  a=$(WEB_UNLOCK_HOME="$NOF" FAKE_L0_BODY="$CF" FAKE_JINA_BODY="$RTE" fetch "$u" 2>&1 | sed -e "s#$NOF#H#g" -e "s#$SK/sites.json#H/sites.json#g")
+  b=$(WEB_UNLOCK_HOME="$SEEDED" FAKE_L0_BODY="$CF" FAKE_JINA_BODY="$RTE" fetch "$u" 2>&1 | sed "s#$SEEDED#H#g")
+  [ "$a" = "$b" ] || { same=0; diffs="$diffs | fetch $u: [$a] vs [$b]"; }
+done
+a=$(WEB_UNLOCK_HOME="$NOF" SERPER_API_KEY="$DUMMY" FAKE_SERPER_BODY="$T/serper.json" search "q" 2>&1)
+b=$(WEB_UNLOCK_HOME="$SEEDED" SERPER_API_KEY="$DUMMY" FAKE_SERPER_BODY="$T/serper.json" search "q" 2>&1)
+[ "$a" = "$b" ] || { same=0; diffs="$diffs | search: [$a] vs [$b]"; }
+a=$(WEB_UNLOCK_HOME="$NOF" CHROME_REAL_PORT=1 CHROME_REAL_PROFILE="$T/prof" env PATH="$P" bash "$SK/bin/chrome-real.sh" status 2>&1)
+b=$(WEB_UNLOCK_HOME="$SEEDED" CHROME_REAL_PORT=1 CHROME_REAL_PROFILE="$T/prof" env PATH="$P" bash "$SK/bin/chrome-real.sh" status 2>&1)
+[ "$a" = "$b" ] || { same=0; diffs="$diffs | chrome-real: [$a] vs [$b]"; }
+[ ! -e "$NOF" ] || { same=0; diffs="$diffs | fetch/search created $NOF"; }
+[ $same = 1 ] && pass "seeded defaults behave like no folder (fetch.sh on registry hosts, search.sh, chrome-real.sh)" || fail "seeded = none" "$diffs"
+# the plugin hook points at this script
+"$PY" - "$ROOT/hooks/hooks.json" "$ROOT" <<'PYEOF' && pass "hooks/hooks.json: a SessionStart hook runs lib/seed.mjs with node" || fail "hooks.json"
+import json, os, sys
+h = json.load(open(sys.argv[1], encoding="utf-8"))["hooks"]["SessionStart"][0]["hooks"][0]
+assert h["command"] == "node", h
+f = h["args"][0].replace("${CLAUDE_PLUGIN_ROOT}", sys.argv[2])
+assert os.path.isfile(f), f
+PYEOF
 
 echo "== chrome-real.sh / cdp.mjs =="
 out=$(env PATH="$P" CHROME_REAL_PORT=1 CHROME_REAL_PROFILE="$T/prof" bash "$SK/bin/chrome-real.sh" status 2>&1)

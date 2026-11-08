@@ -1,8 +1,11 @@
 #!/usr/bin/env bash
 # web-unlock: show your own settings folder, the one that survives plugin updates.
 # SKILL.md tells Claude to run this first and to read every "rules" file it lists.
-# Usage: user-config.sh          print what is there (never prints the content of the env file)
-#        user-config.sh --init   create the folder and seed sites.json from the bundled example (keeps existing files)
+# Usage: user-config.sh          create the folder if it is missing (quietly), then print what is there
+#                                (never prints the content of the env file)
+#        user-config.sh --init   the same, saying for each file whether it was seeded or kept
+# Seeding (lib/seed.mjs) copies the bundled sites.json and env.default and makes references/. It never
+# overwrites or changes a file that exists.
 # Output, one item per line:
 #   home <folder> (exists|missing)
 #   rules <file>                       your rules: read before SKILL.md, they win where they disagree
@@ -17,14 +20,15 @@ HERE="$(cd "$(dirname "$_self")" && pwd)"; SKILL="$(dirname "$HERE")"
 # shellcheck source=../lib/config.sh
 . "$SKILL/lib/config.sh"
 wu_load_env local WEB_UNLOCK_SITES
+NODE="$(command -v node || true)"
+# The same seeding the plugin's SessionStart hook runs; WEB_UNLOCK_SITES from the env file counts too.
+seed() { [ -n "$NODE" ] || return 1; WEB_UNLOCK_HOME="$WEB_UNLOCK_HOME" WEB_UNLOCK_SITES="${WEB_UNLOCK_SITES:-}" "$NODE" "$SKILL/lib/seed.mjs" "$@"; }
 case "${1:-}" in
-  "") ;;
+  "") seed >/dev/null 2>&1 ;;
   --init)
-    mkdir -p "$WEB_UNLOCK_HOME/references" 2>/dev/null || { echo "user-config.sh: could not create $WEB_UNLOCK_HOME/references" >&2; exit 1; }
-    if [ -f "$WEB_UNLOCK_HOME/sites.json" ]; then echo "kept $WEB_UNLOCK_HOME/sites.json"
-    elif cp "$SKILL/sites.json" "$WEB_UNLOCK_HOME/sites.json" 2>/dev/null; then echo "seeded $WEB_UNLOCK_HOME/sites.json"
-    else echo "user-config.sh: could not copy the bundled sites.json to $WEB_UNLOCK_HOME" >&2; exit 1; fi ;;
-  -h|--help) sed -n '2,11p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
+    [ -n "$NODE" ] || { echo "user-config.sh: --init needs node on PATH" >&2; exit 1; }
+    seed --verbose || { echo "user-config.sh: could not create $WEB_UNLOCK_HOME" >&2; exit 1; } ;;
+  -h|--help) sed -n '2,14p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
   *) echo "user-config.sh: unknown option $1 (use --init or nothing)" >&2; exit 1 ;;
 esac
 
@@ -39,7 +43,7 @@ done
 SITES="$(wu_sites)"
 if [ -n "${WEB_UNLOCK_SITES:-}" ]; then from="WEB_UNLOCK_SITES"
 elif [ "$SITES" = "$WEB_UNLOCK_HOME/sites.json" ]; then from="your folder"
-else from="the bundled example; run user-config.sh --init to get your own copy"; fi
+else from="the bundled example"; fi
 PY="$(command -v python3 || command -v python || true)"
 n="?"
 if [ -n "$PY" ] && [ -f "$SITES" ]; then

@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # web-unlock: optional install WITHOUT the plugin system.
 # Copies skills/web-unlock to ~/.claude/skills/web-unlock (where web-unlock-guard looks for a companion skill
-# by default) and seeds your own registry at ~/.config/web-unlock/sites.json (never overwritten).
+# by default) and seeds your own folder ~/.config/web-unlock (sites.json, env; never overwritten).
 # Usage: ./install.sh [--dry-run] [--uninstall]
 # Use this OR the plugin install, not both, or Claude sees the skill twice.
 set -euo pipefail
@@ -32,7 +32,7 @@ run cp -R "$SRC" "$DST"
 [ $DRY = 1 ] || touch "$DST/.installed-by-web-unlock"
 run chmod +x "$DST/bin/fetch.sh" "$DST/bin/search.sh" "$DST/bin/chrome-real.sh" "$DST/bin/blocked" "$DST/bin/cdp.mjs" "$DST/bin/user-config.sh"
 echo "skill: $DST"
-# Your folder (registry seeded once, never overwritten): the same code path as `bin/user-config.sh --init`.
+# Your folder (seeded once, never overwritten): the same code path as `bin/user-config.sh --init` and the plugin's hook.
 if [ $DRY = 1 ]; then echo "would run: WEB_UNLOCK_HOME=$CFG bash $DST/bin/user-config.sh --init"
 else WEB_UNLOCK_HOME="$CFG" bash "$DST/bin/user-config.sh" --init | sed 's/^/registry: /'; fi
 echo "optional keys file: $CFG/env (EXA_API_KEY, SERPER_API_KEY, JINA_API_KEY, BRIGHTDATA_API_KEY, BRIGHTDATA_UNLOCKER_ZONE)"

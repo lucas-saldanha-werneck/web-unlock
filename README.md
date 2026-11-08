@@ -17,9 +17,11 @@ a real headed Chrome instead of a default automation browser.
 | `bin/search.sh "query"` | Search with failover: free Exa MCP -> Exa API -> Serper (Google) -> Tavily -> Firecrawl. One JSON object per result line |
 | `bin/blocked <file>` | Block detector: `OK` or `BLOCKED:<reason>` (Cloudflare, DataDome, PerimeterX, Kasada, Imperva, Akamai, captcha widgets, authwalls, reader errors, shells) |
 | `bin/chrome-real.sh` | Starts a real, headed Chrome in its own empty profile with CDP on port 9223, without stealing focus |
-| `bin/user-config.sh` | Shows your own settings folder (rules, references, registry, keys file); `--init` creates it |
+| `bin/user-config.sh` | Shows your own settings folder (rules, references, registry, keys file), creating it first if it is missing |
 | `bin/cdp.mjs <url>` | Drives that Chrome through Playwright's `connectOverCDP` in a background tab: `--title`, `--text`, `--html file`, `--eval js` |
 | `sites.json` | Example registry: host -> tags, route that worked, how |
+| `env.default` | Starter `env` file: every setting at its default, commented out |
+| `lib/seed.mjs` | Creates your settings folder on first run (run by the plugin's `hooks/hooks.json` at session start) |
 | `references/` | Search doctrine, why a real browser passes where automation fails, the list of block signals |
 
 ## Example
@@ -66,12 +68,19 @@ way) or is installed as this plugin (guard 0.4.0 or later), and it reads the sam
 with `WEB_UNLOCK_SITES` or the folder with `WEB_UNLOCK_HOME`, also set the guard's `sites_file` option to the
 same file.
 
+## Your settings
+
+Your settings live in `~/.config/web-unlock` (or the folder in `WEB_UNLOCK_HOME`). The plugin creates that
+folder by itself the first time it runs (a `SessionStart` hook; with `./install.sh`, the install does it):
+`sites.json` copied from the bundled registry, an `env` file with every setting commented out at its default
+(see Configuration), and an empty `references/`. Plugin updates never touch the folder, and the seeding never
+overwrites or changes a file that is already there. The files it writes behave exactly like having no folder.
+
 ## Your own folder (survives plugin updates)
 
 The plugin folder is replaced on every update, so your own things live in a folder of yours:
-`~/.config/web-unlock` (or the folder in `WEB_UNLOCK_HOME`). Create it with
-`skills/web-unlock/bin/user-config.sh --init`, which seeds `sites.json` from the bundled example and never
-overwrites a file you have.
+`~/.config/web-unlock` (or the folder in `WEB_UNLOCK_HOME`). `skills/web-unlock/bin/user-config.sh` creates
+it too if it is missing (`--init` says what it seeded or kept).
 
 | In your folder | What it is for |
 |---|---|
@@ -158,7 +167,9 @@ bash tests/run.sh
 No network: `curl`, `mcporter`, `tvly` and `scrapling` are fakes on a sandboxed `PATH`, and `HOME` is a temp
 folder. It covers the detector on synthetic block pages, every `fetch.sh` layer and registry lookup, search
 failover, order and normalization, the user folder (`WEB_UNLOCK_HOME`, its `env`, rules, references and
-registry), `chrome-real.sh` refusals, and `install.sh`.
+registry), the first-run seeding (created when missing, existing files byte-identical, overrides respected,
+no crash on a read-only folder, seeded defaults behave like no folder), `chrome-real.sh` refusals, and
+`install.sh`.
 
 ## Uninstall
 
