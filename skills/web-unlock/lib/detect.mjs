@@ -24,6 +24,7 @@ const STRONG = [
   [/Hubo un error accediendo a esta pagina/i, 'mercadolibre-error-wall', 'mercadolibre'],
   [/Por segurança, complete esta etapa/i, 'mercadolibre-captcha-wall', 'mercadolibre'],
   [/Para continuar, acesse sua conta/i, 'mercadolibre-login-wall', 'mercadolibre'],
+  [/Ocorreu um erro\. Por favor, tente novamente/i, 'mercadolibre-error-wall', 'mercadolibre'],
   [/linkedin\.com\/authwall|\bauthwall\b/i, 'authwall', 'linkedin'],
   // Reader proxies (r.jina.ai) that return the target's error as a page
   [/Warning:\s*Target URL returned error\s*(4\d\d|5\d\d)/i, 'reader-target-error', 'reader'],
@@ -45,7 +46,7 @@ const WIDGET = [
   [/g-recaptcha|recaptcha\/api\.js|hcaptcha\.com\/1\/api\.js/i, 'captcha-widget', 'captcha'],
 ];
 // Short error pages: only counted when the whole output is small, so docs prose does not trigger it.
-const SHORT_PAGE = /Too Many Requests|Rate limit exceeded|\bForbidden\b|Access Denied|Request blocked|Something went wrong|try again later|Service Unavailable/i;
+const SHORT_PAGE = /Too Many Requests|Rate limit exceeded|\bForbidden\b|Access Denied|Request blocked|Ocorreu um erro|tente novamente|Something went wrong|try again later|Service Unavailable/i;
 const BLOCKED_STATUS = [401, 403, 406, 429, 451, 503];
 
 function visibleText(t) {
