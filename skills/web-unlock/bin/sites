@@ -1,0 +1,16 @@
+#!/usr/bin/env bash
+# web-unlock: look a host up in the site registry (the bundled sites.json with yours laid on top; same host =
+# yours wins). Usage: sites <host>   one JSON line per matching key (host, parent domains, *.domain)
+#                     sites --all    the merged registry
+set -uo pipefail
+_self="$0"; _n=0
+while [ -L "$_self" ] && [ $_n -lt 40 ]; do _n=$((_n+1)); _l="$(readlink "$_self")"; case "$_l" in /*) _self="$_l";; *) _self="$(dirname "$_self")/$_l";; esac; done
+HERE="$(cd "$(dirname "$_self")" && pwd)"; SKILL="$(dirname "$HERE")"
+# shellcheck source=../lib/config.sh
+. "$SKILL/lib/config.sh"
+wu_load_env local WEB_UNLOCK_SITES
+case "${1:-}" in
+  ""|-h|--help) sed -n '2,4p' "$0" | sed 's/^# \{0,1\}//'; [ -n "${1:-}" ]; exit $? ;;
+  --all) wu_registry merged ;;
+  *) host=$(printf '%s' "$1" | sed -E 's#^[a-zA-Z]+://##; s#/.*##; s#:.*##; s#^www\.##' | tr 'A-Z' 'a-z'); wu_registry lookup "$host" ;;
+esac

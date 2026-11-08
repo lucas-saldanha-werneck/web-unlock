@@ -35,8 +35,9 @@ Run `bin/user-config.sh` once per task. It prints the user's settings folder (`~
 If the folder is missing, carry on with this file alone.
 
 ## 0. First: check `sites.json`
-Look up the host in the registry from the `sites` line above (`$WEB_UNLOCK_SITES`, else the user's folder,
-else the bundled example). Keys match the host, its parent domains and `*.domain`. If the host has a `route`,
+Run `bin/sites <host>`: it prints the matching entries of the registry, which is the bundled `sites.json` with
+the user's file (the `sites` line above) laid on top; a host in both is the user's entry. Keys match the host,
+its parent domains and `*.domain`. If the host has a `route`,
 go straight to it. If `route` is `null`, the `how` field says what already failed: do not repeat it.
 
 ## P1. Search (when the normal search came back thin)
@@ -117,3 +118,4 @@ browser with stealth and proxy (needs the provider's key).
 A new route worked or failed -> update the user's `sites.json` (host, tags, route, how, verified = date).
 Without that the next session rediscovers it. Write to the `sites.json` in the user's folder (run
 `bin/user-config.sh --init` first if it does not exist), never to the plugin folder, which updates overwrite.
+Add or replace only that host's entry under `"hosts"`: the bundled hosts already apply.

@@ -4,8 +4,9 @@
 // Run by the plugin's SessionStart hook (quiet: no output, always exit 0, so a session never waits on it)
 // and by `bin/user-config.sh` (`--init` passes --verbose: one line per file, exit 1 if the folder cannot be
 // made). The folder is the one lib/config.sh reads: $WEB_UNLOCK_HOME, else ~/.config/web-unlock.
-//   sites.json   copy of the bundled registry (skipped when WEB_UNLOCK_SITES, from the environment or the
-//                env file, points elsewhere)
+//   sites.json   your registry, empty ({"hosts": {}} from sites.starter.json): laid over the bundled one at read
+//                time, so bundled updates still reach you (skipped when WEB_UNLOCK_SITES, from the environment or
+//                the env file, points elsewhere)
 //   env          copy of env.default: every setting commented out, so behavior is the same as no file
 //   references/  empty folder for your own reference notes
 import fs from 'node:fs';
@@ -56,7 +57,7 @@ if (ok) try {
 }
 if (ok) {
   // WEB_UNLOCK_SITES set in the environment or in the env file: your registry lives elsewhere, no copy here
-  if (!setting('WEB_UNLOCK_SITES')) ok = seedFile(path.join(SKILL, 'sites.json'), path.join(home, 'sites.json'), 0o644) && ok;
+  if (!setting('WEB_UNLOCK_SITES')) ok = seedFile(path.join(SKILL, 'sites.starter.json'), path.join(home, 'sites.json'), 0o644) && ok;
   ok = seedFile(path.join(SKILL, 'env.default'), envFile, 0o600) && ok;
 }
 process.exitCode = verbose && !ok ? 1 : 0;

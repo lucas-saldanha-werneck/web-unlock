@@ -171,11 +171,11 @@ echo "== user folder (WEB_UNLOCK_HOME, user-config.sh) =="
 uc() { env PATH="$P" bash "$SK/bin/user-config.sh" "$@"; }
 out=$(uc); rc=$?
 [ $rc -eq 0 ] && [[ "$out" == *"home $HOME/.config/web-unlock (exists)"* ]] && [[ "$out" == *"sites $HOME/.config/web-unlock/sites.json"*"from your folder"* ]] \
-  && cmp -s "$HOME/.config/web-unlock/sites.json" "$SK/sites.json" && [[ "$out" != *"rules "* ]] \
+  && cmp -s "$HOME/.config/web-unlock/sites.json" "$SK/sites.starter.json" && [[ "$out" != *"rules "* ]] \
   && pass "user-config.sh on first use seeds the registry quietly; no rules" || fail "uc empty" "$out"
 U="$T/mine"
 out=$(WEB_UNLOCK_HOME="$U" uc --init); rc=$?
-[ $rc -eq 0 ] && cmp -s "$U/sites.json" "$SK/sites.json" && [ -d "$U/references" ] && [[ "$out" == *"sites $U/sites.json"*"from your folder"* ]] \
+[ $rc -eq 0 ] && cmp -s "$U/sites.json" "$SK/sites.starter.json" && [ -d "$U/references" ] && [[ "$out" == *"sites $U/sites.json"*"from your folder"* ]] \
   && pass "--init seeds WEB_UNLOCK_HOME/sites.json and references/" || fail "uc init" "$out"
 echo '{"hosts":{"a.example":{},"b.example":{}}}' > "$U/sites.json"
 WEB_UNLOCK_HOME="$U" uc --init >/dev/null
@@ -186,10 +186,10 @@ out=$(WEB_UNLOCK_HOME="$U" uc)
 [[ "$out" == *"rules $U/rules.md"* ]] && pass "rules files in the user folder are listed" || fail "uc rules" "$out"
 [[ "$out" == *"reference $U/references/search-doctrine.md replaces $SK/references/search-doctrine.md"* ]] && [[ "$out" == *"reference $U/references/mine.md"$'\n'* || "$out" == *"reference $U/references/mine.md" ]] \
   && pass "user references: same name replaces the bundled one, others add" || fail "uc refs" "$out"
-[[ "$out" == *"(2 hosts, from your folder)"* ]] && pass "registry from the user folder, with its host count" || fail "uc sites" "$out"
+[[ "$out" == *"(2 hosts, from your folder;"* ]] && pass "registry from the user folder, with its host count" || fail "uc sites" "$out"
 [[ "$out" == *"env $U/env (present)"* ]] && [[ "$out" != *"$DUMMY"* ]] && pass "env file reported present, values never printed" || fail "uc env" "$out"
 out=$(WEB_UNLOCK_HOME="$U" WEB_UNLOCK_SITES="$T/sites.json" uc)
-[[ "$out" == *"sites $T/sites.json (3 hosts, from WEB_UNLOCK_SITES)"* ]] && pass "WEB_UNLOCK_SITES wins over the user folder" || fail "uc env sites" "$out"
+[[ "$out" == *"sites $T/sites.json (3 hosts, from WEB_UNLOCK_SITES;"* ]] && pass "WEB_UNLOCK_SITES wins over the user folder" || fail "uc env sites" "$out"
 cp "$T/sites.json" "$U/sites.json"
 out=$(WEB_UNLOCK_HOME="$U" FAKE_L0_BODY="$CF" FAKE_JINA_BODY="$RTE" fetch https://example.com/x)
 [[ "$out" == *"fetch-unlock"* ]] && pass "fetch.sh reads the registry in WEB_UNLOCK_HOME" || fail "fetch home" "$out"
@@ -214,15 +214,15 @@ rm -f "$HOME/.config/web-unlock/env"
 H9="$T/h9"; mkdir -p "$H9" "$T/elsewhere"; echo '{"hosts":{"one.example":{}}}' > "$H9/sites.json"
 printf 'WEB_UNLOCK_HOME=%s\n' "$T/elsewhere" > "$H9/env"
 out=$(WEB_UNLOCK_HOME="$H9" env PATH="$P" bash "$SK/bin/user-config.sh")
-[[ "$out" == *"home $H9 (exists)"* ]] && [[ "$out" == *"sites $H9/sites.json (1 hosts, from your folder)"* ]] \
+[[ "$out" == *"home $H9 (exists)"* ]] && [[ "$out" == *"sites $H9/sites.json (1 hosts, from your folder;"* ]] \
   && pass "WEB_UNLOCK_HOME in the env file is ignored" || fail "home in env file" "$out"
 # 6: host count matches what fetch.sh reads ("hosts" only) and skips "_" notes
 echo '{"_doc":"x","hosts":{"_note":"y","a.example":{},"b.example":{}}}' > "$H9/sites.json"
 out=$(WEB_UNLOCK_HOME="$H9" env PATH="$P" bash "$SK/bin/user-config.sh")
-[[ "$out" == *"(2 hosts, from your folder)"* ]] && pass "host count skips _doc and _ notes" || fail "count notes" "$out"
+[[ "$out" == *"(2 hosts, from your folder;"* ]] && pass "host count skips _doc and _ notes" || fail "count notes" "$out"
 echo '{"a.example":{},"b.example":{}}' > "$H9/sites.json"
 out=$(WEB_UNLOCK_HOME="$H9" env PATH="$P" bash "$SK/bin/user-config.sh")
-[[ "$out" == *"(0 hosts, from your folder)"* ]] && pass "a file without \"hosts\" counts 0, as fetch.sh reads it" || fail "count no hosts" "$out"
+[[ "$out" == *"(0 hosts, from your folder;"* ]] && pass "a file without \"hosts\" counts 0, as fetch.sh reads it" || fail "count no hosts" "$out"
 # 7: --init failure is reported, not "seeded"
 printf 'x' > "$T/afile"
 out=$(WEB_UNLOCK_HOME="$(wp "$T/afile")/sub" env PATH="$P" bash "$SK/bin/user-config.sh" --init 2>&1); rc=$?
@@ -261,12 +261,11 @@ SEED="$SK/lib/seed.mjs"
 # what the plugin's hook runs: node seed.mjs, with only HOME set
 SH="$T/seedhome"; mkdir -p "$SH"
 out=$(env -u WEB_UNLOCK_HOME HOME="$SH" USERPROFILE="$SH" "$NODE" "$SEED" </dev/null 2>&1); rc=$?
-[ $rc -eq 0 ] && [ -z "$out" ] && cmp -s "$SH/.config/web-unlock/sites.json" "$SK/sites.json" \
+[ $rc -eq 0 ] && [ -z "$out" ] && cmp -s "$SH/.config/web-unlock/sites.json" "$SK/sites.starter.json" \
   && cmp -s "$SH/.config/web-unlock/env" "$SK/env.default" && [ -d "$SH/.config/web-unlock/references" ] \
   && pass "missing folder -> created with sites.json, env and references/, silently, exit 0" || fail "seed missing" "rc=$rc $out"
-n=$("$PY" -c 'import json,sys; d=json.load(open(sys.argv[1],encoding="utf-8")); print(len([k for k in d["hosts"] if not k.startswith("_")]))' "$SH/.config/web-unlock/sites.json" 2>&1)
-nb=$("$PY" -c 'import json,sys; d=json.load(open(sys.argv[1],encoding="utf-8")); print(len([k for k in d["hosts"] if not k.startswith("_")]))' "$SK/sites.json" 2>&1)
-[ "$n" = "$nb" ] && [ "$n" -gt 0 ] && pass "seeded sites.json keeps the hosts under \"hosts\" ($n hosts)" || fail "seed hosts key" "$n vs $nb"
+n=$("$PY" -c 'import json,sys; d=json.load(open(sys.argv[1],encoding="utf-8")); print(d["hosts"] == {} and "_doc" in d)' "$SH/.config/web-unlock/sites.json" 2>&1)
+[ "$n" = "True" ] && pass "seeded sites.json is empty ({\"hosts\": {}} + _doc), not a copy of the bundled one" || fail "seed hosts key" "$n"
 case "$(uname -s)" in MINGW*|MSYS*|CYGWIN*) pass "env file mode check skipped on Windows";;
   *) m=$(ls -l "$SH/.config/web-unlock/env" | cut -c1-10)
      [ "$m" = "-rw-------" ] && pass "seeded env file is private (600)" || fail "env mode" "$m";; esac
@@ -315,7 +314,7 @@ out=$(env -u WEB_UNLOCK_HOME HOME="$SH4" USERPROFILE="$SH4" "$NODE" --import "$F
 [ $rc -eq 0 ] && [ ! -e "$SH4/.config/web-unlock/sites.json" ] && [ ! -e "$SH4/.config/web-unlock/env" ] \
   && pass "failed write -> no empty sites.json or env left behind" || fail "seed failed write" "rc=$rc $out $(ls -A "$SH4/.config/web-unlock" 2>&1)"
 env -u WEB_UNLOCK_HOME HOME="$SH4" USERPROFILE="$SH4" "$NODE" "$SEED"
-cmp -s "$SH4/.config/web-unlock/env" "$SK/env.default" && cmp -s "$SH4/.config/web-unlock/sites.json" "$SK/sites.json" \
+cmp -s "$SH4/.config/web-unlock/env" "$SK/env.default" && cmp -s "$SH4/.config/web-unlock/sites.json" "$SK/sites.starter.json" \
   && pass "and the next run seeds both files whole" || fail "seed after failed write"
 # the seeded folder behaves exactly like no folder at all (only the registry's path in messages differs)
 NOF="$T/nofolder"; SEEDED="$T/seededfolder"
@@ -343,6 +342,38 @@ assert h["command"] == "node", h
 f = h["args"][0].replace("${CLAUDE_PLUGIN_ROOT}", sys.argv[2])
 assert os.path.isfile(f), f
 PYEOF
+
+echo "== registry overlay (bundled first, yours on top) =="
+# a fake bundled skill so a "plugin update" can be simulated without touching the real one
+FS="$T/fakeskill"; mkdir -p "$FS"; cp -R "$SK/bin" "$SK/lib" "$FS/"
+printf '{"hosts":{"bundled.example":{"route":"http","how":"bundled-only"},"both.example":{"route":"http","how":"bundled-entry","tags":["x"]},"alias.example":{"alias_of":"bundled.example"}}}\n' > "$FS/sites.json"
+cp "$SK/sites.starter.json" "$FS/"
+OV="$T/overlay"; mkdir -p "$OV"
+printf '{"hosts":{"mine.example":{"route":"browser-real","how":"user-only"},"both.example":{"route":"api","how":"user-entry"}}}\n' > "$OV/sites.json"
+lk() { WEB_UNLOCK_HOME="$OV" env PATH="$P" bash "$FS/bin/sites" "$1" 2>&1; }
+[[ "$(lk mine.example)" == *'"how": "user-only"'* ]] && pass "overlay: a host only in your file is found" || fail "overlay user-only" "$(lk mine.example)"
+[[ "$(lk https://www.bundled.example/x)" == *'"how": "bundled-only"'* ]] && pass "overlay: a host only in the bundled file is found" || fail "overlay bundled-only" "$(lk bundled.example)"
+out=$(lk both.example)
+[[ "$out" == *'"how": "user-entry"'* ]] && [[ "$out" != *bundled-entry* ]] && [[ "$out" != *tags* ]] \
+  && pass "overlay: same host in both -> your whole entry wins (no bundled fields mixed in)" || fail "overlay both" "$out"
+[[ "$(lk alias.example)" == *'"how": "bundled-only"'* ]] && pass "overlay: alias_of is followed in the merged view" || fail "overlay alias" "$(lk alias.example)"
+out=$(WEB_UNLOCK_HOME="$OV" FAKE_L0_BODY="$CF" FAKE_JINA_BODY="$RTE" env PATH="$P" bash "$FS/bin/fetch.sh" https://bundled.example/x 2>&1)
+[[ "$out" == *"known route for bundled.example -> http: bundled-only"* ]] && pass "fetch.sh reads the merged view (bundled host)" || fail "fetch overlay bundled" "$out"
+out=$(WEB_UNLOCK_HOME="$OV" FAKE_L0_BODY="$CF" FAKE_JINA_BODY="$RTE" env PATH="$P" bash "$FS/bin/fetch.sh" https://both.example/x 2>&1)
+[[ "$out" == *"-> api: user-entry"* ]] && pass "fetch.sh reads the merged view (your entry wins)" || fail "fetch overlay both" "$out"
+# a seeded user gets a host the next plugin version adds to the bundled file
+SU="$T/seeduser"; WEB_UNLOCK_HOME="$SU" "$NODE" "$FS/lib/seed.mjs"
+cmp -s "$SU/sites.json" "$FS/sites.starter.json" || fail "overlay seed" "not seeded from the starter"
+printf '{"hosts":{"new-in-update.example":{"route":"fetch-render","how":"added later"}}}\n' > "$FS/sites.json"
+[[ "$(WEB_UNLOCK_HOME="$SU" env PATH="$P" bash "$FS/bin/sites" new-in-update.example)" == *'"how": "added later"'* ]] \
+  && pass "overlay: a bundled update reaches a seeded user" || fail "overlay update" "$(WEB_UNLOCK_HOME="$SU" bash "$FS/bin/sites" new-in-update.example)"
+# an old user file that is a full copy of the bundled registry keeps working: it overrides what it lists
+cp "$SK/sites.json" "$T/fullcopy.json"
+first=$("$PY" -c 'import json,sys; print(next(k for k in json.load(open(sys.argv[1],encoding="utf-8"))["hosts"] if not k.startswith("_")))' "$SK/sites.json")
+out=$(WEB_UNLOCK_SITES="$T/fullcopy.json" env PATH="$P" bash "$SK/bin/sites" "$first")
+[ -n "$out" ] && pass "overlay: a full copy of the bundled file still works ($first found)" || fail "overlay full copy" "$out"
+out=$(WEB_UNLOCK_HOME="$OV" env PATH="$P" bash "$FS/bin/user-config.sh")
+[[ "$out" == *"(2 hosts, from your folder; 3 with the bundled ones)"* ]] && pass "user-config.sh shows your hosts and the merged count" || fail "overlay count" "$out"
 
 echo "== chrome-real.sh / cdp.mjs =="
 out=$(env PATH="$P" CHROME_REAL_PORT=1 CHROME_REAL_PROFILE="$T/prof" bash "$SK/bin/chrome-real.sh" status 2>&1)

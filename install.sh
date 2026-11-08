@@ -30,7 +30,7 @@ run mkdir -p "$(dirname "$DST")"
 run rm -rf "$DST"
 run cp -R "$SRC" "$DST"
 [ $DRY = 1 ] || touch "$DST/.installed-by-web-unlock"
-run chmod +x "$DST/bin/fetch.sh" "$DST/bin/search.sh" "$DST/bin/chrome-real.sh" "$DST/bin/blocked" "$DST/bin/cdp.mjs" "$DST/bin/user-config.sh"
+run chmod +x "$DST/bin/fetch.sh" "$DST/bin/search.sh" "$DST/bin/chrome-real.sh" "$DST/bin/blocked" "$DST/bin/cdp.mjs" "$DST/bin/user-config.sh" "$DST/bin/sites"
 echo "skill: $DST"
 # Your folder (seeded once, never overwritten): the same code path as `bin/user-config.sh --init` and the plugin's hook.
 if [ $DRY = 1 ]; then echo "would run: WEB_UNLOCK_HOME=$CFG bash $DST/bin/user-config.sh --init"

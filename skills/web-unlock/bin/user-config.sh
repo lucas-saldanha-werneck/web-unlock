@@ -4,13 +4,13 @@
 # Usage: user-config.sh          create the folder if it is missing (quietly), then print what is there
 #                                (never prints the content of the env file)
 #        user-config.sh --init   the same, saying for each file whether it was seeded or kept
-# Seeding (lib/seed.mjs) copies the bundled sites.json and env.default and makes references/. It never
+# Seeding (lib/seed.mjs) writes an empty sites.json (laid over the bundled one), env.default, references/. It never
 # overwrites or changes a file that exists.
 # Output, one item per line:
 #   home <folder> (exists|missing)
 #   rules <file>                       your rules: read before SKILL.md, they win where they disagree
 #   reference <file> [replaces <bundled file>]
-#   sites <file> (<N> hosts, from WEB_UNLOCK_SITES|your folder|the bundled example)
+#   sites <file> (<N> hosts, from WEB_UNLOCK_SITES|your folder|the bundled example; <M> with the bundled ones)
 #   env <file> (present|absent)
 set -uo pipefail
 # Find this script's real folder, following symlinks (readlink without -f works on macOS bash 3.2 too).
@@ -44,19 +44,16 @@ SITES="$(wu_sites)"
 if [ -n "${WEB_UNLOCK_SITES:-}" ]; then from="WEB_UNLOCK_SITES"
 elif [ "$SITES" = "$WEB_UNLOCK_HOME/sites.json" ]; then from="your folder"
 else from="the bundled example"; fi
-PY="$(command -v python3 || command -v python || true)"
-n="?"
-if [ -n "$PY" ] && [ -f "$SITES" ]; then
-  n=$("$PY" -c 'import json,sys
-try:
-    d = json.load(open(sys.argv[1], encoding="utf-8"))
-    h = d.get("hosts", {}) if isinstance(d, dict) else {}
-    # Same shape fetch.sh reads; keys starting with "_" are notes, not hosts.
-    print(len([k for k in h if not k.startswith("_")]) if isinstance(h, dict) else 0)
-except Exception:
-    print("unreadable")' "$SITES" 2>/dev/null || echo "?")
+n="?"; m="?"
+if [ "$from" = "the bundled example" ]; then read -r _ m < <(wu_registry count 2>/dev/null); n="$m"
+elif [ -f "$SITES" ]; then
+  read -r n m < <(wu_registry count 2>/dev/null)
+  # a file that is there but not a JSON object with "hosts" counts 0 (as fetch.sh reads it): say if unreadable
+  PY="$(command -v python3 || command -v python || true)"
+  if [ -n "$PY" ] && ! "$PY" -c 'import json,sys; json.load(open(sys.argv[1], encoding="utf-8"))' "$SITES" 2>/dev/null; then n="unreadable"; fi
 fi
+[ -n "$n" ] || n="?"; [ -n "$m" ] || m="?"
 [ -f "$SITES" ] || n="missing"
-echo "sites $SITES ($n hosts, from $from)"
+echo "sites $SITES ($n hosts, from $from; $m with the bundled ones)"
 if [ -f "$ENV_FILE" ]; then echo "env $ENV_FILE (present)"; else echo "env $ENV_FILE (absent)"; fi
 exit 0

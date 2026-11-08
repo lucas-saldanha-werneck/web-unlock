@@ -71,33 +71,9 @@ if ge L1 "$START" && ge "$STOP" L1; then
   fi
 fi
 
-# L2: unlock. A route that already worked for this host (sites.json), else Bright Data if configured.
+# L2: unlock. A route that already worked for this host (registry: bundled + yours), else Bright Data.
 if ge L2 "$START" && ge "$STOP" L2; then
-  KNOWN=""
-  if [ -n "$PY" ] && [ -f "$SITES" ]; then
-    KNOWN=$("$PY" - "$SITES" "$HOST" <<'EOF' 2>/dev/null
-import json, sys
-try:
-    d = json.load(open(sys.argv[1], encoding="utf-8")).get("hosts", {})
-except Exception:
-    sys.exit(0)
-h = sys.argv[2]; parts = h.split(".")
-keys = []
-for i in range(len(parts) - 1):
-    k = ".".join(parts[i:])
-    keys.append(k)
-    if i > 0:
-        keys.append("*." + k)
-for k in keys:
-    e = d.get(k)
-    if e and e.get("alias_of"):
-        e = d.get(e["alias_of"])
-    if e and e.get("route"):
-        print("%s: %s" % (e["route"], e.get("how", "")))
-        break
-EOF
-)
-  fi
+  KNOWN=$(wu_registry route "$HOST" 2>/dev/null)  # the bundled registry with yours on top
   if [ -n "$KNOWN" ]; then
     echo "BLOCKED $LAST ${REASON:-blocked} | L2: use the known route for $HOST -> $KNOWN"; exit 2
   fi
@@ -108,7 +84,7 @@ EOF
       -d "{\"zone\":\"$BRIGHTDATA_UNLOCKER_ZONE\",\"url\":\"$URL\",\"format\":\"raw\",\"data_format\":\"markdown\"}" 2>/dev/null
     if [ -s "$f" ] && check "$f"; then cp "$f" "$OUT"; echo "OK L2-brightdata $OUT $(size "$f")"; exit 0; fi
   else
-    echo "BLOCKED $LAST ${REASON:-blocked} | L2 unavailable: no route for $HOST in $SITES and no BRIGHTDATA_API_KEY/BRIGHTDATA_UNLOCKER_ZONE in $ENV_FILE. Next: a site-specific scraper or API, or a real headed browser (bin/chrome-real.sh + bin/cdp.mjs)."; exit 2
+    echo "BLOCKED $LAST ${REASON:-blocked} | L2 unavailable: no route for $HOST in the registry ($SITES over the bundled one) and no BRIGHTDATA_API_KEY/BRIGHTDATA_UNLOCKER_ZONE in $ENV_FILE. Next: a site-specific scraper or API, or a real headed browser (bin/chrome-real.sh + bin/cdp.mjs)."; exit 2
   fi
 fi
 echo "BLOCKED $LAST ${REASON:-blocked}"; exit 2

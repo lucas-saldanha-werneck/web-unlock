@@ -19,7 +19,9 @@ a real headed Chrome instead of a default automation browser.
 | `bin/chrome-real.sh` | Starts a real, headed Chrome in its own empty profile with CDP on port 9223, without stealing focus |
 | `bin/user-config.sh` | Shows your own settings folder (rules, references, registry, keys file), creating it first if it is missing |
 | `bin/cdp.mjs <url>` | Drives that Chrome through Playwright's `connectOverCDP` in a background tab: `--title`, `--text`, `--html file`, `--eval js` |
-| `sites.json` | Example registry: host -> tags, route that worked, how |
+| `bin/sites <host>` | Looks a host up in the registry: the bundled `sites.json` with yours laid on top (`--all` prints the merged registry) |
+| `sites.json` | Bundled registry: host -> tags, route that worked, how. Yours is laid over it (`lib/sites.py`) |
+| `sites.starter.json` | Starter for your own registry: `{"hosts": {}}` |
 | `env.default` | Starter `env` file: every setting at its default, commented out |
 | `lib/seed.mjs` | Creates your settings folder on first run (run by the plugin's `hooks/hooks.json` at session start) |
 | `references/` | Search doctrine, why a real browser passes where automation fails, the list of block signals |
@@ -64,7 +66,7 @@ They use the same layer names and the same `sites.json` format.
 
 The guard finds this skill on its own, whether it sits at `~/.claude/skills/web-unlock` (the `./install.sh`
 way) or is installed as this plugin (guard 0.4.0 or later), and it reads the same registry,
-`~/.config/web-unlock/sites.json`. The guard does not read this skill's `env` file: if you move the registry
+`~/.config/web-unlock/sites.json`, laid over the skill's bundled one the same way. The guard does not read this skill's `env` file: if you move the registry
 with `WEB_UNLOCK_SITES` or the folder with `WEB_UNLOCK_HOME`, also set the guard's `sites_file` option to the
 same file.
 
@@ -72,7 +74,7 @@ same file.
 
 Your settings live in `~/.config/web-unlock` (or the folder in `WEB_UNLOCK_HOME`). The plugin creates that
 folder by itself the first time it runs (a `SessionStart` hook; with `./install.sh`, the install does it):
-`sites.json` copied from the bundled registry, an `env` file with every setting commented out at its default
+an empty `sites.json` (`{"hosts": {}}`), an `env` file with every setting commented out at its default
 (see Configuration), and an empty `references/`. Plugin updates never touch the folder, and the seeding never
 overwrites or changes a file that is already there. The files it writes behave exactly like having no folder.
 
@@ -86,7 +88,7 @@ it too if it is missing (`--init` says what it seeded or kept).
 |---|---|
 | `*.md` (for example `rules.md`) | Your own rules: the sites you log into, the accounts to check, tools you have, extra rungs, the language to answer in. The skill tells Claude to run `bin/user-config.sh` first and read these files before the rest of `SKILL.md`; where they disagree, yours win |
 | `references/` | Your own reference notes. A file with the same name as one in the skill's `references/` replaces it; other files add to them |
-| `sites.json` | Your registry. The scripts use it before the bundled example, and Claude records new routes here |
+| `sites.json` | Your registry, laid over the bundled one: the bundled hosts first, then yours; a host in both is your entry, whole. New bundled hosts from plugin updates still reach you. A full copy of an older bundled file keeps working (it overrides every host it lists). Claude records new routes here; `bin/sites <host>` shows the merged entry |
 | `env` | Shell file read by every script: API keys and any setting from the table below (for example `WEB_UNLOCK_SEARCH_ORDER=...` or `CHROME_REAL_APP=...`). A variable already set in the environment wins. `fetch.sh` and `search.sh` export the file's values for the CLIs they call; `chrome-real.sh` takes only `CHROME_REAL_*` and does not pass API keys to Chrome. `chmod 600`; `user-config.sh` only says whether it exists |
 
 `bin/user-config.sh` prints one line per item:
@@ -95,7 +97,7 @@ it too if it is missing (`--init` says what it seeded or kept).
 home /Users/me/.config/web-unlock (exists)
 rules /Users/me/.config/web-unlock/rules.md
 reference /Users/me/.config/web-unlock/references/search-doctrine.md replaces .../references/search-doctrine.md
-sites /Users/me/.config/web-unlock/sites.json (93 hosts, from your folder)
+sites /Users/me/.config/web-unlock/sites.json (93 hosts, from your folder; 98 with the bundled ones)
 env /Users/me/.config/web-unlock/env (present)
 ```
 
@@ -114,7 +116,7 @@ the environment wins over the file. These settings reach this skill's scripts on
 | Env var | Default | Meaning |
 |---|---|---|
 | `WEB_UNLOCK_HOME` | `~/.config/web-unlock` | Your own folder. Environment only: a `WEB_UNLOCK_HOME` line in the `env` file is ignored |
-| `WEB_UNLOCK_SITES` | `sites.json` in your folder if it exists, else the bundled example | Site registry |
+| `WEB_UNLOCK_SITES` | `sites.json` in your folder | Your site registry, laid over the bundled one |
 | `WEB_UNLOCK_ENV` | `env` in your folder | Shell file with API keys and settings, read by every script (environment only) |
 | `WEB_UNLOCK_SEARCH_ORDER` | `exa-mcp exa serper tavily firecrawl` | Providers `search.sh` tries, in order (space or comma separated; ones left out are skipped) |
 | `WEB_UNLOCK_TMP` | `$TMPDIR/web-unlock` | Where fetched pages go when `-o` is not given |
