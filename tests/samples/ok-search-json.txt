@@ -1,0 +1,1 @@
+{"query":"hooks","results":[{"title":"Hooks reference","url":"https://docs.example.com/hooks","content":"Hooks run shell commands at fixed points in the session lifecycle."}]}

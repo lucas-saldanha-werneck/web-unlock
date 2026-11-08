@@ -1,0 +1,47 @@
+{
+  "_doc": "Host -> what worked. Read by this skill (go straight to a known route) and by bin/fetch.sh (L2 hint). The web-unlock-guard plugin reads the same format (its tags decide its rules). Keep your own copy at ~/.config/web-unlock/sites.json (or set WEB_UNLOCK_SITES) so plugin updates do not overwrite it. tags: cloudflare (Turnstile or JS challenge), antibot (the site's own wall), logged (needs an account), captcha (human by design), rate-limit. route = the layer that worked: http | fetch-render | fetch-unlock | browser-automation | browser-stealth | browser-real | browser-cloud | api | human | null (nothing worked yet; 'how' says what failed). Keys match the host, its parent domains, and '*.domain' (subdomains only). 'alias_of' points one key at another.",
+  "hosts": {
+    "youtube.com": {
+      "tags": ["video", "bot-wall"],
+      "route": "http",
+      "how": "The watch page through r.jina.ai is an empty 401 shell. Captions: yt-dlp --write-auto-sub --skip-download <url> works from a residential IP. From a datacenter IP YouTube answers 'confirm you're not a bot'; then use a transcript scraper service or a residential proxy."
+    },
+    "youtu.be": { "alias_of": "youtube.com" },
+    "reddit.com": {
+      "tags": ["antibot"],
+      "route": "browser-real",
+      "how": "curl (www and old.reddit.com, also .json) returns a shell or 403; r.jina.ai and Firecrawl refuse. Works: OpenCLI in a real Chrome (opencli reddit search \"...\" -f yaml), or the official API with your own app credentials."
+    },
+    "linkedin.com": {
+      "tags": ["antibot"],
+      "route": "fetch-unlock",
+      "how": "curl lands on the authwall; Firecrawl refuses the site. Public profiles: a LinkedIn profile scraper on Apify or a similar unlocker service."
+    },
+    "mercadolivre.com.br": {
+      "tags": ["antibot"],
+      "route": "fetch-unlock",
+      "how": "curl, default headless browsers and Firecrawl hit 'Hubo un error' / 'Just a moment' / a login wall. Works: a Mercado Livre scraper actor on Apify."
+    },
+    "mercadolibre.com": { "alias_of": "mercadolivre.com.br" },
+    "r.jina.ai": {
+      "tags": ["rate-limit"],
+      "route": "fetch-render",
+      "how": "About 10 parallel requests return 429 'Per IP rate limit exceeded'. Run requests one at a time with a ~3 s pause; that passed every time."
+    },
+    "mcp.exa.ai": {
+      "tags": ["rate-limit"],
+      "route": "api",
+      "how": "The free Exa MCP endpoint returns 429 'free MCP rate limit' on ~8 parallel calls. One call at a time with a ~3 s pause passed 40+ searches in a row."
+    },
+    "api.ashbyhq.com": {
+      "tags": ["api", "jobs"],
+      "route": "api",
+      "how": "Public JSON: GET /posting-api/job-board/<company-slug>?includeCompensation=true returns jobs[] with location, isRemote and compensation."
+    },
+    "job-boards.greenhouse.io": {
+      "tags": ["jobs"],
+      "route": "http",
+      "how": "curl reads the whole board with /jobs/N links. Public JSON also at boards-api.greenhouse.io/v1/boards/<company>/jobs."
+    }
+  }
+}

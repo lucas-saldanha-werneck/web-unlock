@@ -1,0 +1,5 @@
+- heading "example.com" [level=1, ref=e1]
+- heading "Performing security verification" [level=2, ref=e2]
+- Iframe "Widget containing a Cloudflare security challenge" [ref=e5]
+  - checkbox "Verify you are human" [checked=false, ref=e9]
+- link "Privacy, opens in a new tab" [ref=e4]

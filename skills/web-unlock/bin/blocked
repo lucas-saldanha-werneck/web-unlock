@@ -1,0 +1,32 @@
+#!/usr/bin/env node
+// web-unlock: classify the output of a web tool as BLOCKED:<reason> or OK.
+// Usage: blocked <file> [--status N] [--expect-page] [--json]   |   cmd | blocked - [--json]
+// Exit code: 0 = OK, 2 = blocked.
+import fs from 'node:fs';
+import { detect } from '../lib/detect.mjs';
+
+const args = process.argv.slice(2);
+if (args.includes('-h') || args.includes('--help')) {
+  console.log('usage: blocked <file|-> [--status N] [--expect-page] [--json]\nPrints OK (exit 0) or BLOCKED:<reason> (exit 2).');
+  process.exit(0);
+}
+const valueFlags = new Set(['--status']);
+let file = '-';
+for (let i = 0; i < args.length; i++) {
+  if (valueFlags.has(args[i])) { i++; continue; }
+  if (!args[i].startsWith('--')) { file = args[i]; break; }
+}
+const status = args.includes('--status') ? args[args.indexOf('--status') + 1] : null;
+const expectPage = args.includes('--expect-page');
+const json = args.includes('--json');
+let text;
+try {
+  text = file === '-' ? fs.readFileSync(0, 'utf8') : fs.readFileSync(file, 'utf8');
+} catch (e) {
+  console.error(`blocked: cannot read ${file}: ${e.message}`);
+  process.exit(1);
+}
+const r = detect(text, { status, expectPage });
+if (json) console.log(JSON.stringify(r));
+else console.log(r.blocked ? `BLOCKED:${r.reason} (${r.vendor}) - ${r.match}` : 'OK');
+process.exit(r.blocked ? 2 : 0);

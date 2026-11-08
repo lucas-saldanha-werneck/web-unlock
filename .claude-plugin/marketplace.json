@@ -1,0 +1,15 @@
+{
+  "name": "web-unlock",
+  "description": "A skill for getting past blocked web pages, with a block detector and a real-Chrome launcher.",
+  "owner": {
+    "name": "Lucas Saldanha Werneck",
+    "url": "https://github.com/lucas-saldanha-werneck"
+  },
+  "plugins": [
+    {
+      "name": "web-unlock",
+      "source": "./",
+      "description": "Second step of web access: classify the target, climb a ladder of fetchers and browsers, stop at the first that works, and record the route per site."
+    }
+  ]
+}
