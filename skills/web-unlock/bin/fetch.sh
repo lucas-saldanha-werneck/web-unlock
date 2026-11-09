@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # web-unlock: read a public page through a cascade of layers, moving up only when the detector says BLOCKED.
 #   L0 http (plain curl)
-#   L1 render (r.jina.ai -> Scrapling stealth fetch, if installed -> Firecrawl, if installed)
+#   L1 render (oc, if installed -> r.jina.ai -> Scrapling stealth fetch, if installed -> Firecrawl, if installed)
 #   L2 unlock (a known route from sites.json -> Bright Data Web Unlocker, if keys are set)
 # Usage: fetch.sh <url> [-o output] [--start L0|L1|L2] [--stop L0|L1|L2]
 # Output: one line, "OK <layer> <file> <bytes>" or "BLOCKED <last layer> <reason>".
@@ -53,8 +53,16 @@ if ge L0 "$START" && ge "$STOP" L0; then
   fi
 fi
 
-# L1: render. r.jina.ai (free), then Scrapling (free, local), then Firecrawl (paid credits).
+# L1: render. oc (only-cli, free, local, Chrome TLS identity; if installed), then r.jina.ai (free),
+# then Scrapling (free, local), then Firecrawl (paid credits).
 if ge L1 "$START" && ge "$STOP" L1; then
+  if command -v oc >/dev/null 2>&1 && oc --help 2>/dev/null | grep -q 'oc open'; then
+    LAST=L1-oc; f="$TMP/$SLUG.L1.oc.md"
+    TO="$(command -v timeout || command -v gtimeout || true)"
+    OC_HOME="$TMP/oc-home" ${TO:+$TO 60} oc raw "$URL" >"$f" 2>"$TMP/$SLUG.oc.err"; ocrc=$?
+    if [ "$ocrc" -eq 0 ] && [ -s "$f" ] && check "$f"; then cp "$f" "$OUT"; echo "OK L1-oc $OUT $(size "$f")"; exit 0; fi
+    [ "$ocrc" -eq 2 ] && REASON="BLOCKED:oc-no-readable-text (JavaScript-only page, challenge or wall)"
+  fi
   LAST=L1-jina; f="$TMP/$SLUG.L1.jina.md"
   curl -s --max-time 60 -o "$f" -H "Accept: text/markdown" ${JINA_API_KEY:+-H "Authorization: Bearer $JINA_API_KEY"} "https://r.jina.ai/$URL" 2>/dev/null
   if [ -s "$f" ] && check "$f"; then cp "$f" "$OUT"; echo "OK L1-jina $OUT $(size "$f")"; exit 0; fi
