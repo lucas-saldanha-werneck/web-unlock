@@ -5,7 +5,7 @@ description: Second step of web access, for when a normal fetch or search failed
 
 # web-unlock: what to do when the normal fetch does not get through
 
-**First step of web access = your normal tools** (WebFetch, WebSearch, `curl -s URL -o file`, `r.jina.ai`,
+**First step of web access = your normal tools** (WebFetch, WebSearch, `curl -s URL -o file`, `oc open URL` from [only-cli](https://github.com/only-cli/oc) if installed, `r.jina.ai`,
 `gh` for GitHub, `yt-dlp` for video captions). This skill starts when they return a block, an empty shell or
 nothing, or when the target is a logged-in, Cloudflare or anti-bot site you already know about.
 
@@ -62,6 +62,7 @@ installed).
 | | Layer | Tool |
 |---|---|---|
 | A | L0 http | `curl -s -o` with a browser user agent. Returns raw HTML |
+| B0 | L1 render, first | `oc raw <url>` ([only-cli](https://github.com/only-cli/oc): `npm install -g --allow-scripts=koffi @only-cli/oc`; free, local, Chrome TLS identity). Exit 2 = no readable text (JavaScript-only page, challenge, wall): move on. `fetch.sh` tries it before r.jina.ai when it is installed. Tested 2026-11-09: read Indeed search results behind Cloudflare where r.jina.ai got the challenge page; fails on JavaScript-only pages |
 | B | L1 render | `r.jina.ai` (free, clean markdown; **"Warning: Target URL returned error NNN" is a block**, not content) |
 | B1 | L1 stealth, local (if installed) | Scrapling: `scrapling extract fetch <url> <file.md> --solve-cloudflare`. Free and local, passes Cloudflare Turnstile and interstitials in HTTP mode with a spoofed TLS fingerprint. Try it **before** paid services. If it asks for a browser install, run `scrapling install --force` |
 | B2 | L1 render, paid (if installed) | `firecrawl scrape`. Uses credits; refuses some sites (LinkedIn) |
