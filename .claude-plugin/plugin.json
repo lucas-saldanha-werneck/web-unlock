@@ -1,7 +1,7 @@
 {
   "name": "web-unlock",
-  "version": "0.3.0",
-  "description": "A skill for when a normal web fetch is blocked: ladders by target type (public page, Cloudflare, logged-in site), fetch/search/real-Chrome scripts, a per-site registry of what worked, and a search doctrine for 'before saying it does not exist'.",
+  "version": "0.3.1",
+  "description": "What Claude does when a web fetch is blocked: steps per site type and a record of what worked.",
   "author": {
     "name": "Lucas Saldanha Werneck",
     "url": "https://github.com/lucas-saldanha-werneck"

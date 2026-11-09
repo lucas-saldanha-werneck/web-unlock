@@ -9,7 +9,7 @@
     {
       "name": "web-unlock",
       "source": "./",
-      "description": "Second step of web access: classify the target, climb a ladder of fetchers and browsers, stop at the first that works, and record the route per site."
+      "description": "What Claude does when a web fetch is blocked: steps per site type and a record of what worked."
     }
   ]
 }

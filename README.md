@@ -44,8 +44,8 @@ In a session, Claude loads the skill when a page comes back blocked, or when you
 As a plugin:
 
 ```
-/plugin marketplace add lucas-saldanha-werneck/web-unlock
-/plugin install web-unlock@web-unlock
+/plugin marketplace add lucas-saldanha-werneck/claude-plugins
+/plugin install web-unlock@lucas-plugins
 ```
 
 Or as a plain skill folder (copies to `~/.claude/skills/web-unlock` and seeds `~/.config/web-unlock/sites.json`):
@@ -70,19 +70,16 @@ way) or is installed as this plugin (guard 0.4.0 or later), and it reads the sam
 with `WEB_UNLOCK_SITES` or the folder with `WEB_UNLOCK_HOME`, also set the guard's `sites_file` option to the
 same file.
 
-## Your settings
+## Settings
 
-Your settings live in `~/.config/web-unlock` (or the folder in `WEB_UNLOCK_HOME`). The plugin creates that
-folder by itself the first time it runs (a `SessionStart` hook; with `./install.sh`, the install does it):
-an empty `sites.json` (`{"hosts": {}}`), an `env` file with every setting commented out at its default
-(see Configuration), and an empty `references/`. Plugin updates never touch the folder, and the seeding never
-overwrites or changes a file that is already there. The files it writes behave exactly like having no folder.
-
-## Your own folder (survives plugin updates)
-
-The plugin folder is replaced on every update, so your own things live in a folder of yours:
-`~/.config/web-unlock` (or the folder in `WEB_UNLOCK_HOME`). `skills/web-unlock/bin/user-config.sh` creates
-it too if it is missing (`--init` says what it seeded or kept).
+The plugin folder is replaced on every update, so your settings and your own things live in a folder of
+yours: `~/.config/web-unlock` (or the folder in `WEB_UNLOCK_HOME`). The plugin creates that folder by itself
+the first time it runs (a `SessionStart` hook; with `./install.sh`, the install does it), and
+`skills/web-unlock/bin/user-config.sh` creates it too if it is missing (`--init` says what it seeded or kept).
+It starts with an empty `sites.json` (`{"hosts": {}}`), an `env` file with every setting commented out at its
+default (see the variables below), and an empty `references/`. The files it writes behave exactly like having
+no folder. Nothing in that folder is touched by `/plugin update`, by `./install.sh` or by an uninstall, and the
+seeding never overwrites or changes a file that is already there.
 
 | In your folder | What it is for |
 |---|---|
@@ -101,14 +98,12 @@ sites /Users/me/.config/web-unlock/sites.json (93 hosts, from your folder; 98 wi
 env /Users/me/.config/web-unlock/env (present)
 ```
 
-Nothing in that folder is touched by `/plugin update`, by `./install.sh` or by an uninstall.
-
 If you also keep a personal skill called `web-unlock` in `~/.claude/skills/`, Claude sees two skills with
 almost the same description (`web-unlock` and the plugin's `web-unlock:web-unlock`) and may load either.
 Move its content into your folder (its rules into `rules.md`, its registry into `sites.json`, its notes into
 `references/`) and remove the personal copy, or keep only the personal one.
 
-## Configuration
+### Variables
 
 All optional. Each can be set in the environment or in the `env` file of your folder; a value already set in
 the environment wins over the file. These settings reach this skill's scripts only, not web-unlock-guard.
@@ -176,8 +171,7 @@ no crash on a read-only folder, seeded defaults behave like no folder), `chrome-
 ## Uninstall
 
 ```
-/plugin uninstall web-unlock@web-unlock
-/plugin marketplace remove web-unlock
+/plugin uninstall web-unlock@lucas-plugins
 ```
 
 or `./install.sh --uninstall`. Your registry and keys in `~/.config/web-unlock` stay; delete that folder
