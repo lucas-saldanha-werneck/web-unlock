@@ -36,6 +36,12 @@ out=$(printf 'fine page body that is long enough to be a real page, with plenty 
 printf 'tiny' > "$T/tiny.txt"
 out=$("$NODE" "$SK/bin/blocked" --expect-page "$T/tiny.txt"); rc=$?
 [ $rc -eq 2 ] && [[ "$out" == *suspiciously-short* ]] && pass "--expect-page flags a near-empty page (flag before file)" || fail "--expect-page" "$out"
+# Installed plugins live under ~/.claude; a {"type":"commonjs"} package.json above them must not break the detector.
+mkdir -p "$T/cjs/parent"
+printf '{"type":"commonjs"}\n' > "$T/cjs/package.json"
+cp -R "$SK/bin" "$SK/lib" "$T/cjs/parent/"
+out=$(printf 'fine page body that is long enough to be a real page, with plenty of visible text in it for the check to pass.' | "$NODE" "$T/cjs/parent/bin/blocked" - 2>&1); rc=$?
+[ $rc -eq 0 ] && [[ "$out" == OK* ]] && pass "detector runs under a parent package.json with type commonjs" || fail "commonjs parent (rc=$rc)" "$out"
 cp "$SK/lib/detect.mjs" "$T/detect.mjs"
 out=$(cd "$T" && "$NODE" --input-type=module -e "
 import { detect, inferLayer, firstHost, NEXT_LAYER } from './detect.mjs';
