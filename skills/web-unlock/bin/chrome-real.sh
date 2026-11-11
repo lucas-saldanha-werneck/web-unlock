@@ -66,8 +66,14 @@ port_open() { (exec 3<>"/dev/tcp/127.0.0.1/$PORT") 2>/dev/null; }
 # pid of the MAIN process of this profile (not the helpers)
 pid_of() {
   [ -n "$BIN" ] || return 0
-  ps axo pid=,command= 2>/dev/null | grep -F -- "--user-data-dir=$DST" | grep -v -i "helper\|--type=" \
-    | grep -E -- "--user-data-dir=${DST}( |\$)" | awk '{print $1}' | head -1 || true
+  # One awk that gets the profile through the environment. A grep with the profile on its own command
+  # line is in the ps list too, and it matched itself: every call "found" a Chrome that was not there.
+  ps axo pid=,command= 2>/dev/null | WU_NEEDLE="--user-data-dir=$DST" awk '
+    BEGIN { n = ENVIRON["WU_NEEDLE"]; l = length(n) }
+    { i = index($0, n); if (!i) next
+      c = substr($0, i + l, 1); if (c != "" && c != " ") next     # the same folder, not one that starts like it
+      if (index(tolower($0), "helper") || index($0, "--type=")) next
+      print $1; exit }' || true
 }
 # open a URL in a new tab; background unless $2 = false (CDP Target.createTarget). Needs Node 22+ (global WebSocket).
 open_tab() {
