@@ -44,7 +44,7 @@ In a session, Claude loads the skill when a page comes back blocked, or when you
 As a plugin:
 
 ```
-/plugin marketplace add lucas-saldanha-werneck/claude-plugins
+/plugin marketplace add lucas-saldanha-werneck/lucas-tools
 /plugin install web-unlock@lucas-tools
 ```
 
