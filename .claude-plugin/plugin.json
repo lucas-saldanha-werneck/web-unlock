@@ -1,6 +1,6 @@
 {
   "name": "web-unlock",
-  "version": "0.3.2",
+  "version": "0.3.3",
   "description": "What Claude does when a web fetch is blocked: steps per site type and a record of what worked.",
   "author": {
     "name": "Lucas Saldanha Werneck",

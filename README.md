@@ -45,7 +45,7 @@ As a plugin:
 
 ```
 /plugin marketplace add lucas-saldanha-werneck/claude-plugins
-/plugin install web-unlock@lucas-plugins
+/plugin install web-unlock@lucas-tools
 ```
 
 Or as a plain skill folder (copies to `~/.claude/skills/web-unlock` and seeds `~/.config/web-unlock/sites.json`):
@@ -171,7 +171,7 @@ no crash on a read-only folder, seeded defaults behave like no folder), `chrome-
 ## Uninstall
 
 ```
-/plugin uninstall web-unlock@lucas-plugins
+/plugin uninstall web-unlock@lucas-tools
 ```
 
 or `./install.sh --uninstall`. Your registry and keys in `~/.config/web-unlock` stay; delete that folder
