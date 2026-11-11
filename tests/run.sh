@@ -251,6 +251,15 @@ if [ -f "$T/ps-env.txt" ]; then
   ! grep -q SOME_API_KEY "$T/ps-env.txt" && pass "chrome-real.sh keeps API keys out of child processes" || fail "chrome env leak" "key found in the child's environment"
 else pass "chrome-real child-env check skipped: no process lookup on this OS ($out)"; fi
 rm -f "$SB/ps"
+# 5b: with the real ps, a profile that no browser uses is "not running" (the lookup used to match its own grep)
+if command -v ps >/dev/null 2>&1 && ps axo pid=,command= >/dev/null 2>&1; then
+  bad=0
+  for _ in 1 2 3 4 5; do
+    out=$(CHROME_REAL_APP="$T/fake-chrome" CHROME_REAL_PROFILE="$T/profile-of-nobody" CHROME_REAL_PORT=59123 bash "$SK/bin/chrome-real.sh" stop 2>&1)
+    [ "$out" = "was not running" ] || bad=1
+  done
+  [ $bad = 0 ] && pass "chrome-real.sh does not take its own process lookup for a running Chrome" || fail "chrome pid self-match" "$out"
+else pass "chrome-real self-match check skipped: no ps on this system"; fi
 # 10: install.sh seeds the folder through user-config.sh --init (which also makes references/)
 H10="$T/h10"; out=$(WEB_UNLOCK_HOME="$H10" CLAUDE_CONFIG_DIR="$T/cc10" bash "$ROOT/install.sh" 2>&1); rc=$?
 [ $rc -eq 0 ] && [ -f "$H10/sites.json" ] && [ -d "$H10/references" ] && pass "install.sh seeds through user-config.sh --init" || fail "install init" "rc=$rc $out"
