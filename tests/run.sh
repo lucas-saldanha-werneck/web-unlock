@@ -71,7 +71,9 @@ case "$url" in
   https://api.brightdata.com/*) body="${FAKE_BD_BODY:-}"; code=200;;
   https://google.serper.dev/*) body="${FAKE_SERPER_BODY:-}"; code=200;;
   https://api.exa.ai/*) body="${FAKE_EXA_BODY:-}"; code=200;;
-  *) body="${FAKE_L0_BODY:-}"; code="${FAKE_L0_CODE:-200}";;
+  *) body="${FAKE_L0_BODY:-}"; code="${FAKE_L0_CODE:-200}"
+     # a network failure: real curl writes nothing, prints 000 for -w and exits non-zero
+     if [ "${FAKE_L0_FAIL:-}" = 1 ]; then [ -n "$w" ] && printf '000'; exit 7; fi;;
 esac
 if [ -n "$body" ] && [ -n "$out" ]; then cp "$body" "$out"; elif [ -n "$out" ]; then : > "$out"; fi
 [ -n "$w" ] && printf '%s' "$code"
@@ -417,6 +419,93 @@ out=$(cd "$T" && env -u CHROME_REAL_PORT -u PLAYWRIGHT_CORE_PATH PATH="$P" WEB_U
 [ $rc -eq 4 ] && [[ "$out" == *"on port 1:"* ]] && pass "cdp.mjs reads CHROME_REAL_PORT and PLAYWRIGHT_CORE_PATH from the env file" || fail "cdp env file" "rc=$rc $out"
 out=$(cd "$T" && env PATH="$P" CHROME_REAL_PORT=2 WEB_UNLOCK_HOME="$(wp "$T/cdpenv")" "$NODE" "$SK/bin/cdp.mjs" https://a.example 2>&1); rc=$?
 [[ "$out" == *"on port 2:"* ]] && pass "cdp.mjs: the environment wins over the env file" || fail "cdp env wins" "rc=$rc $out"
+
+echo "== audit fixes, round 2 =="
+# WU-01: a network failure on a URL fetched before must not serve the old copy as OK
+out=$(FAKE_L0_BODY="$GOOD" fetch https://again.example.com/p); rc=$?
+out=$(FAKE_L0_FAIL=1 FAKE_JINA_BODY="$RTE" fetch https://again.example.com/p); rc=$?
+[ $rc -ne 0 ] && [[ "$out" != OK* ]] && pass "WU-01: curl failure does not serve the previous run's file" || fail "WU-01 stale L0 file" "rc=$rc $out"
+# WU-04: a symlink planted under a predictable name in the temp folder is not written through
+VICTIM="$T/victim.txt"; echo "precious" > "$VICTIM"
+SLUGP="planted-example-com-x"
+ln -s "$VICTIM" "$WEB_UNLOCK_TMP/$SLUGP.L0.html" 2>/dev/null
+if [ -L "$WEB_UNLOCK_TMP/$SLUGP.L0.html" ]; then
+  out=$(FAKE_L0_BODY="$GOOD" fetch https://planted.example.com/x -o "$T/out/planted.html"); rc=$?
+  [ "$(cat "$VICTIM")" = precious ] && pass "WU-04: work files are not written through a planted symlink" || fail "WU-04 symlink" "victim overwritten: $out"
+else pass "WU-04 symlink check skipped: no symlinks on this system"; fi
+mkdir -p "$T/realtmp"; ln -s "$T/realtmp" "$T/linktmp" 2>/dev/null
+if [ -L "$T/linktmp" ]; then
+  out=$(WEB_UNLOCK_TMP="$T/linktmp" FAKE_L0_BODY="$GOOD" fetch https://x.example.com/y 2>&1); rc=$?
+  [ $rc -eq 1 ] && [[ "$out" == *REFUSED* ]] && pass "WU-04: a temp folder that is a symlink is refused" || fail "WU-04 tmp symlink" "rc=$rc $out"
+else pass "WU-04 temp-symlink check skipped: no symlinks on this system"; fi
+# WU-09: an error page (404/500) with a body is not OK at L0
+out=$(FAKE_L0_BODY="$GOOD" FAKE_L0_CODE=404 FAKE_JINA_BODY="$RTE" fetch https://err.example.com/missing); rc=$?
+[[ "$out" != "OK L0-curl"* ]] && pass "WU-09: HTTP 404 with a body is not OK L0" || fail "WU-09 404" "$out"
+out=$(FAKE_L0_BODY="$GOOD" FAKE_L0_CODE=502 FAKE_JINA_BODY="$RTE" fetch https://err.example.com/bad); rc=$?
+[[ "$out" != "OK L0-curl"* ]] && pass "WU-09: HTTP 502 with a body is not OK L0" || fail "WU-09 502" "$out"
+out=$("$NODE" "$SK/bin/blocked" "$GOOD" --status 404 --expect-page); rc=$?
+[ $rc -eq 2 ] && [[ "$out" == *http-404* ]] && pass "WU-09: blocked --status 404 --expect-page is not a page" || fail "WU-09 detector" "$out"
+# WU-10: L0 writes to the -o file asked for
+out=$(FAKE_L0_BODY="$GOOD" fetch https://docs.example.com/o -o "$T/out/saida.txt"); rc=$?
+[ $rc -eq 0 ] && [[ "$out" == "OK L0-curl $T/out/saida.txt "* ]] && cmp -s "$T/out/saida.txt" "$GOOD" \
+  && pass "WU-10: L0 honors -o exactly" || fail "WU-10 -o name" "$out"
+# WU-07: a failed copy to the destination is not OK
+echo "not a folder" > "$T/afile"
+out=$(FAKE_L0_BODY="$GOOD" fetch https://docs.example.com/c -o "$T/afile/x.html" 2>&1); rc=$?
+[ $rc -ne 0 ] && [[ "$out" != OK* ]] && pass "WU-07: an unwritable -o is reported, not OK" || fail "WU-07 cp" "rc=$rc $out"
+# WU-08: the Bright Data body is valid JSON even with quotes in the URL
+printf '%s=%s\n' BRIGHTDATA_API_KEY "$DUMMY" BRIGHTDATA_UNLOCKER_ZONE "'zo\"ne'" > "$HOME/.config/web-unlock/env"   # the file is shell: quoted
+: > "$FAKE_LOG"
+out=$(FAKE_L0_BODY="$CF" FAKE_JINA_BODY="$RTE" FAKE_BD_BODY="$GOODMD" fetch 'https://q.example.com/a"b\c'); rc=$?
+body=$(grep '^https://api.brightdata.com' "$FAKE_LOG" | sed 's/^[^|]*| //')
+chk=$(printf '%s' "$body" | "$NODE" -e 'let s="";process.stdin.on("data",d=>s+=d).on("end",()=>{try{const j=JSON.parse(s);console.log(j.url+"|"+j.zone)}catch(e){console.log("BAD "+e.message)}})')
+[ "$chk" = 'https://q.example.com/a"b\c|zo"ne' ] && pass "WU-08: Bright Data JSON escapes the URL and zone" || fail "WU-08 json" "$chk / $body"
+rm -f "$HOME/.config/web-unlock/env"
+# WU-11: search.sh -n must be a number
+out=$(EXA_API_KEY="$DUMMY" FAKE_EXA_BODY="$S/ok-search-json.txt" search "q" -n '1,"x":2' --provider exa 2>&1); rc=$?
+[ $rc -eq 1 ] && [[ "$out" == *"-n"* ]] && pass "WU-11: search.sh rejects a non-numeric -n" || fail "WU-11 -n" "rc=$rc $out"
+# WU-02: PLAYWRIGHT_CORE_PATH without a trailing slash still finds the package
+mkdir -p "$T/pw2/node_modules/playwright-core" "$T/noenv"
+printf 'process.stderr.write("FAKEPW2-LOADED\\n"); module.exports = { chromium: {} };\n' > "$T/pw2/node_modules/playwright-core/index.js"
+out=$(cd "$T/noenv" && env PATH="$P" CHROME_REAL_PORT=1 WEB_UNLOCK_HOME="$(wp "$T/noenv")" PLAYWRIGHT_CORE_PATH="$(wp "$T/pw2")" "$NODE" "$SK/bin/cdp.mjs" https://a.example 2>&1); rc=$?
+[[ "$out" == *FAKEPW2-LOADED* ]] && pass "WU-02: PLAYWRIGHT_CORE_PATH works without a trailing slash" || fail "WU-02 no slash" "rc=$rc $out"
+# WU-06: a playwright-core in the current folder does not win over the one next to the skill
+mkdir -p "$T/cdpcopy/node_modules/playwright-core" "$T/cwdpw/node_modules/playwright-core"
+cp -R "$SK" "$T/cdpcopy/skill"
+printf 'process.stderr.write("BUNDLED-PW\\n"); module.exports = { chromium: {} };\n' > "$T/cdpcopy/node_modules/playwright-core/index.js"
+printf 'process.stderr.write("CWD-PW\\n"); module.exports = { chromium: {} };\n' > "$T/cwdpw/node_modules/playwright-core/index.js"
+out=$(cd "$T/cwdpw" && env -u PLAYWRIGHT_CORE_PATH PATH="$P" CHROME_REAL_PORT=1 WEB_UNLOCK_HOME="$(wp "$T/noenv")" "$NODE" "$T/cdpcopy/skill/bin/cdp.mjs" https://a.example 2>&1); rc=$?
+[[ "$out" == *BUNDLED-PW* ]] && [[ "$out" != *CWD-PW* ]] && pass "WU-06: cdp.mjs does not load playwright from the current folder first" || fail "WU-06 cwd first" "rc=$rc $out"
+# WU-12: the tab is closed when navigation fails
+mkdir -p "$T/pw12/node_modules/playwright-core"
+cat > "$T/pw12/node_modules/playwright-core/index.js" <<'PWEOF'
+const fs = require('fs');
+const tag = () => fs.readFileSync(process.env.FAKE_TAG_FILE, 'utf8');
+const page = { url: () => tag(), goto: async () => { throw new Error('fake navigation timeout'); },
+  close: async () => { fs.writeFileSync(process.env.FAKE_CLOSED_FILE, 'closed'); } };
+module.exports = { chromium: { connectOverCDP: async () => ({ contexts: () => [{ pages: () => [page] }], close: async () => {} }) } };
+PWEOF
+rm -f "$T/cdp.port" "$T/cdp.tag" "$T/cdp.closed"
+"$NODE" "$ROOT/tests/fake-cdp.mjs" "$(wp "$T/cdp.port")" "$(wp "$T/cdp.tag")" & CDPPID=$!
+for _ in $(seq 1 50); do [ -s "$T/cdp.port" ] && break; sleep 0.1; done
+out=$(cd "$T/noenv" && env PATH="$P" WEB_UNLOCK_HOME="$(wp "$T/noenv")" PLAYWRIGHT_CORE_PATH="$(wp "$T/pw12")/" FAKE_TAG_FILE="$(wp "$T/cdp.tag")" FAKE_CLOSED_FILE="$(wp "$T/cdp.closed")" "$NODE" "$SK/bin/cdp.mjs" https://a.example --port "$(cat "$T/cdp.port" 2>/dev/null)" 2>&1); rc=$?
+kill $CDPPID 2>/dev/null; wait $CDPPID 2>/dev/null
+[ $rc -ne 0 ] && [[ "$out" == *"fake navigation timeout"* ]] && [ -f "$T/cdp.closed" ] && pass "WU-12: cdp.mjs closes its tab when navigation fails" || fail "WU-12 tab left open" "rc=$rc closed=$([ -f "$T/cdp.closed" ] && echo yes || echo no) $out"
+# WU-03: start --fresh refuses a folder this script did not create
+case "$(uname -s)" in
+  Darwin) mkdir -p "$T/Fake.app/Contents/MacOS"; printf '#!/bin/sh\nexit 0\n' > "$T/Fake.app/Contents/MacOS/Fake"; chmod +x "$T/Fake.app/Contents/MacOS/Fake"; FAKEAPP="$T/Fake.app";;
+  Linux) printf '#!/bin/sh\nexit 0\n' > "$T/fakechrome"; chmod +x "$T/fakechrome"; FAKEAPP="$T/fakechrome";;
+  *) FAKEAPP="";;
+esac
+if [ -n "$FAKEAPP" ]; then
+  mkdir -p "$T/precious"; echo keep > "$T/precious/notes.txt"
+  out=$(env PATH="$P" CHROME_REAL_APP="$FAKEAPP" CHROME_REAL_PORT=1 CHROME_REAL_PROFILE="$T/precious" bash "$SK/bin/chrome-real.sh" start --fresh 2>&1); rc=$?
+  [ $rc -ne 0 ] && [[ "$out" == REFUSED* ]] && [ -f "$T/precious/notes.txt" ] && pass "WU-03: start --fresh refuses a folder chrome-real.sh did not create" || fail "WU-03 fresh" "rc=$rc $out"
+else pass "WU-03 check skipped: chrome-real.sh start is not supported on this OS"; fi
+# WU-05: uninstall refuses a folder install.sh did not create
+mkdir -p "$T/cc5/skills/web-unlock"; echo mine > "$T/cc5/skills/web-unlock/SKILL.md"
+out=$(CLAUDE_CONFIG_DIR="$T/cc5" bash "$ROOT/install.sh" --uninstall 2>&1); rc=$?
+[ $rc -ne 0 ] && [ -f "$T/cc5/skills/web-unlock/SKILL.md" ] && pass "WU-05: uninstall keeps a copy it did not install" || fail "WU-05 uninstall" "rc=$rc $out"
 
 echo "== install.sh =="
 out=$(bash "$ROOT/install.sh" --dry-run 2>&1); rc=$?

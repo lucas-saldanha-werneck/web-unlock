@@ -114,7 +114,7 @@ the environment wins over the file. These settings reach this skill's scripts on
 | `WEB_UNLOCK_SITES` | `sites.json` in your folder | Your site registry, laid over the bundled one |
 | `WEB_UNLOCK_ENV` | `env` in your folder | Shell file with API keys and settings, read by every script (environment only) |
 | `WEB_UNLOCK_SEARCH_ORDER` | `exa-mcp exa serper tavily firecrawl` | Providers `search.sh` tries, in order (space or comma separated; ones left out are skipped) |
-| `WEB_UNLOCK_TMP` | `$TMPDIR/web-unlock` | Where fetched pages go when `-o` is not given |
+| `WEB_UNLOCK_TMP` | `$TMPDIR/web-unlock` | Where fetched pages go when `-o` is not given (made private, `chmod 700`; refused if it is a symlink or another user's folder). With `-o`, the page goes to exactly that file |
 | `WEB_UNLOCK_ACCEPT_LANGUAGE` | `en-US,en;q=0.9` | `Accept-Language` for plain curl |
 | `WEB_UNLOCK_NO_SCRAPLING` | unset | `1` skips Scrapling in `fetch.sh` |
 | `CHROME_REAL_PORT` | `9223` | CDP port of the automation Chrome (9222 is usually your main Chrome's) |

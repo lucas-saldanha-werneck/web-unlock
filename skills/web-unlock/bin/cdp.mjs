@@ -29,12 +29,19 @@ if (!url) { console.error('usage: cdp.mjs <url> [--title|--text|--html f|--eval 
 function loadPlaywright() {
   const bases = [];
   const pw = setting('PLAYWRIGHT_CORE_PATH');
-  if (pw) bases.push(pw);
-  bases.push(path.join(process.cwd(), 'noop.js'), import.meta.url);
+  if (pw) {
+    // createRequire takes a FILE: for a folder without a trailing slash it would search the parent folder.
+    let isDir = false;
+    try { isDir = fs.statSync(pw).isDirectory(); } catch { /* missing: used as given */ }
+    bases.push(isDir ? path.join(pw, 'noop.js') : pw);
+  }
+  bases.push(import.meta.url);
   try {
     const g = execSync('npm root -g', { stdio: ['ignore', 'pipe', 'ignore'], timeout: 10000 }).toString().trim();
     if (g) bases.push(path.join(g, 'noop.js'), path.join(g, '@playwright', 'cli', 'node_modules', 'noop.js'), path.join(g, 'playwright', 'node_modules', 'noop.js'));
   } catch { /* npm missing: try the other places */ }
+  // The current folder comes last: a node_modules planted in a repo you are working in must not win.
+  bases.push(path.join(process.cwd(), 'noop.js'));
   for (const base of bases) {
     const req = createRequire(base.endsWith('/') ? base + 'noop.js' : base);
     for (const name of ['playwright-core', 'playwright']) {
@@ -70,9 +77,9 @@ const bgTarget = async () => {
 await bgTarget();
 
 const browser = await chromium.connectOverCDP({ endpointURL: `http://127.0.0.1:${port}`, timeout: 90000 });
+let page = null;
 try {
   const ctx = browser.contexts()[0];
-  let page = null;
   for (let i = 0; i < 20 && !page; i++) { page = ctx.pages().find(p => p.url().includes(tag)) || null; if (!page) await new Promise(r => setTimeout(r, 250)); }
   if (!page) throw new Error('the background tab did not show up in the context');
   await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 60000 });
@@ -84,5 +91,8 @@ try {
   if (opt('--eval')) out.eval = await page.evaluate(opt('--eval'));
   if (/Just a moment|Attention Required|Access Denied/i.test(title)) out.blocked = true;
   console.log(JSON.stringify(out, null, a.includes('--text') ? 0 : 1));
-  if (!a.includes('--keep')) await page.close();
-} finally { await browser.close().catch(() => {}); }
+} finally {
+  // Close the tab on every path (a failed goto too), unless --keep; then only disconnect.
+  if (page && !a.includes('--keep')) await page.close().catch(() => {});
+  await browser.close().catch(() => {});
+}
