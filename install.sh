@@ -17,6 +17,9 @@ for a in "$@"; do case "$a" in
 run() { if [ $DRY = 1 ]; then echo "would run: $*"; else "$@"; fi; }
 
 if [ $UNINSTALL = 1 ]; then
+  if [ -e "$DST" ] && [ ! -f "$DST/.installed-by-web-unlock" ]; then
+    echo "REFUSED: $DST was not installed by this script (no .installed-by-web-unlock). Remove it yourself if you mean to." >&2; exit 1
+  fi
   if [ -e "$DST" ]; then run rm -rf "$DST"; echo "removed $DST"; else echo "nothing at $DST"; fi
   echo "kept your registry and keys in $CFG (delete that folder yourself if you want)"
   exit 0

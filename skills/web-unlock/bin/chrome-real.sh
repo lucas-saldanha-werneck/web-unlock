@@ -37,6 +37,7 @@ OS="$(uname -s 2>/dev/null || echo unknown)"
 DST="${CHROME_REAL_PROFILE:-$HOME/.chrome-automation-profile}"
 PORT="${CHROME_REAL_PORT:-9223}"
 LOG="$DST/chrome-real.log"
+MARKER=".created-by-chrome-real"
 
 case "$OS" in
   Darwin)
@@ -110,6 +111,13 @@ case "$cmd" in
     if [ "$OS" = Linux ] && [ -z "$BIN" ]; then echo "FAILED: no Chrome or Chromium binary found. Set CHROME_REAL_APP."; exit 1; fi
     FRESH=0; URL=""
     for a in "$@"; do case "$a" in --fresh) FRESH=1;; *) URL="$a";; esac; done
+    # --fresh deletes the folder: only one this script made (its marker, or the log every start writes there).
+    if [ "$FRESH" = 1 ] && [ -e "$DST" ]; then
+      if [ -L "$DST" ] || [ ! -d "$DST" ] || [ "$DST" = "$HOME" ] || [ "$DST" = / ] || \
+         { [ ! -f "$DST/$MARKER" ] && [ ! -f "$DST/chrome-real.log" ]; }; then
+        echo "REFUSED: --fresh deletes $DST, and chrome-real.sh did not create that folder. Point CHROME_REAL_PROFILE at its own folder."; exit 2
+      fi
+    fi
     if port_open; then
       P=$(pid_of)
       if [ -z "$P" ]; then echo "REFUSED: port $PORT is used by another process (not the automation Chrome in $DST). Pick another CHROME_REAL_PORT."; exit 1; fi
@@ -119,7 +127,7 @@ case "$cmd" in
     fi
     [ -n "$(pid_of)" ] && { echo "FAILED: Chrome for profile $DST is running (pid $(pid_of)) without port $PORT. Run stop and try again."; exit 1; }
     if [ "$FRESH" = 1 ]; then rm -rf "$DST"; echo "profile recreated EMPTY at $DST"; fi
-    mkdir -p "$DST"; chmod 700 "$DST"
+    mkdir -p "$DST"; chmod 700 "$DST"; touch "$DST/$MARKER"
     launch
     for _ in $(seq 1 40); do port_open && break; sleep 0.5; done
     if port_open; then

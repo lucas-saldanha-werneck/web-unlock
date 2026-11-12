@@ -19,6 +19,8 @@ N=5; PROV=auto; GL=""; HL=""
 while [ $# -gt 0 ]; do case "$1" in
   -n) N="$2"; shift 2;; --provider) PROV="$2"; shift 2;; --gl) GL="$2"; shift 2;; --hl) HL="$2"; shift 2;;
   *) echo "search.sh: unknown option $1" >&2; usage >&2; exit 1;; esac; done
+# -n goes into the JSON of the search APIs as a number: accept only a positive integer.
+case "$N" in ''|*[!0-9]*|0) echo "search.sh: -n needs a positive whole number, got: $N" >&2; usage >&2; exit 1;; esac
 # Find this script's real folder, following symlinks (readlink without -f works on macOS bash 3.2 too).
 _self="$0"; _n=0
 while [ -L "$_self" ] && [ $_n -lt 40 ]; do _n=$((_n+1)); _l="$(readlink "$_self")"; case "$_l" in /*) _self="$_l";; *) _self="$(dirname "$_self")/$_l";; esac; done

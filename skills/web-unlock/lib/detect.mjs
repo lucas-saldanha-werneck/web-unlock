@@ -70,6 +70,10 @@ export function detect(text, opts = {}) {
   if (status && BLOCKED_STATUS.includes(status)) {
     return { blocked: true, reason: 'http-' + status, vendor: 'http', match: 'status ' + status };
   }
+  // A caller that expects a page: any other 4xx/5xx is an error page (404, 410, 500, 502...), not the page.
+  if (status && status >= 400 && opts.expectPage) {
+    return { blocked: true, reason: 'http-' + status, vendor: 'http', match: 'status ' + status };
+  }
   // Signatures run on the raw text and on the visible text (wall phrases are split by tags in HTML).
   const vis = /<[a-z!/][^>]*>/i.test(t) ? visibleText(t) : null;
   for (const [re, reason, vendor] of STRONG) {
