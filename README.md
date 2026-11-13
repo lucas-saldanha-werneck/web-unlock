@@ -1,8 +1,22 @@
 # web-unlock
 
+[![CI](https://github.com/lucas-saldanha-werneck/web-unlock/actions/workflows/test.yml/badge.svg)](https://github.com/lucas-saldanha-werneck/web-unlock/actions/workflows/test.yml)
+[![License](https://img.shields.io/github/license/lucas-saldanha-werneck/web-unlock)](LICENSE)
+[![Version](https://img.shields.io/badge/version-0.3.7-blue)](CHANGELOG.md)
+
 A Claude Code skill for the moment a normal web fetch fails: a Cloudflare challenge, a 403, a captcha, an
 authwall, an empty JavaScript shell. It gives Claude a ladder per kind of target, scripts that climb it, a
 per-site registry of what worked, and a short doctrine for searches that end in "it does not exist".
+
+[![web-unlock demo: tap to open the video](https://github.com/user-attachments/assets/d02b3b1b-c1cd-4a85-999e-f1b372d39e4b)](https://lucas-saldanha-werneck.github.io/web-unlock/demo.mp4)
+
+<table>
+<tr>
+<td align="center"><img src="https://github.com/user-attachments/assets/f1f82ac9-d8ce-41e1-b2f3-4dc7f054a062" alt="A blocked page names the next step" width="320"><br>A blocked page names the next step</td>
+<td align="center"><img src="https://github.com/user-attachments/assets/6de39d57-1b70-42fe-a239-d677b6ccbf3a" alt="It opens a real Chrome behind your work" width="320"><br>It opens a real Chrome behind your work</td>
+<td align="center"><img src="https://github.com/user-attachments/assets/fc02e66c-64c6-4342-ab83-eb56d32bf4eb" alt="The route that worked is saved" width="320"><br>The route that worked is saved</td>
+</tr>
+</table>
 
 Without it, Claude tends to retry the same blocked request with small changes, or to give up and say the page
 can't be read. Most blocks have a known next step: a rendering reader, a stealth fetcher, the site's own API, or
@@ -191,3 +205,7 @@ yourself if you want. `rm -rf ~/.chrome-automation-profile` removes the automati
 MIT
 
 Built with Claude Code
+
+## Security
+
+See [SECURITY.md](SECURITY.md) for what this plugin accesses and how to report a vulnerability.
