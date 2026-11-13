@@ -1,6 +1,7 @@
 ---
 name: web-unlock
-description: Second step of web access, for when a normal fetch or search failed or was not enough. Use when a page comes back blocked or empty ("Just a moment", "Verify you are human", 403/429, captcha, authwall, a JavaScript shell, r.jina.ai "Warning - Target URL returned error"), when the target is a site that needs the user's login, when a host is already listed in sites.json, when you need to drive a real Chrome, or before concluding "it does not exist" or publishing a price list or search-based table. Also when the user says "the site blocked it", "log into my account on X", "force the read", "use the real Chrome". Not the first step: plain page reads and searches start with your normal tools (WebFetch, WebSearch, curl).
+description: >-
+  Second step of web access, for when a normal fetch or search failed or was not enough. Use when a page comes back blocked or empty ("Just a moment", "Verify you are human", 403/429, captcha, authwall, a JavaScript shell, r.jina.ai "Warning - Target URL returned error"), when the target is a site that needs the user's login, when a host is already listed in sites.json, when you need to drive a real Chrome, or before concluding "it does not exist" or publishing a price list or search-based table. Also when the user says "the site blocked it", "log into my account on X", "force the read", "use the real Chrome". Not the first step: plain page reads and searches start with your normal tools (WebFetch, WebSearch, curl).
 ---
 
 # web-unlock: what to do when the normal fetch does not get through
