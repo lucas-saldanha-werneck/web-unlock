@@ -2,6 +2,8 @@
 name: web-unlock
 description: >-
   Second step of web access, for when a normal fetch or search failed or was not enough. Use when a page comes back blocked or empty ("Just a moment", "Verify you are human", 403/429, captcha, authwall, a JavaScript shell, r.jina.ai "Warning - Target URL returned error"), when the target is a site that needs the user's login, when a host is already listed in sites.json, when you need to drive a real Chrome, or before concluding "it does not exist" or publishing a price list or search-based table. Also when the user says "the site blocked it", "log into my account on X", "force the read", "use the real Chrome". Not the first step: plain page reads and searches start with your normal tools (WebFetch, WebSearch, curl).
+metadata:
+  author: Lucas Saldanha Werneck <lucas@2olhares.com>
 ---
 
 # web-unlock: what to do when the normal fetch does not get through
@@ -21,6 +23,13 @@ follow its message; it names the next layer.
 Paths below are relative to this skill's base directory (the folder that holds this SKILL.md): `bin/`,
 `lib/detect.mjs`, `sites.json`, `references/`. Every key and every external tool is optional; each script says
 what it skipped.
+
+## Instructions
+1. Run `bin/user-config.sh` and read the user's rules files; they win over this file.
+2. Run `bin/sites <host>`; if the host has a `route`, use it.
+3. Otherwise classify the target (search, public page, logged-in site, public anti-bot site) and follow its section below, one layer at a time.
+4. After 2 failures on the same layer, move up a layer.
+5. When a route worked or failed, record it in the user's `sites.json`.
 
 ## Before anything: the user's own folder
 Run `bin/user-config.sh` once per task. It prints the user's settings folder (`~/.config/web-unlock`, or
@@ -121,3 +130,9 @@ A new route worked or failed -> update the user's `sites.json` (host, tags, rout
 Without that the next session rediscovers it. Write to the `sites.json` in the user's folder (run
 `bin/user-config.sh --init` first if it does not exist), never to the plugin folder, which updates overwrite.
 Add or replace only that host's entry under `"hosts"`: the bundled hosts already apply.
+
+## Examples
+- A plain fetch of a product page returns "Just a moment...". Run `bin/fetch.sh <url>`; it prints one line, `OK <layer> <file> <bytes>` or `BLOCKED <layer> <reason>`, and the body goes to the file, not the terminal.
+- The user says "log into my account on X". Check `bin/sites X`, then use the user's own Chrome (route B or C) or `bin/chrome-real.sh start <url>` (route D), and say which account is active before any write.
+- The user says "the site blocked it" or "use the real Chrome". Read the block signals, move up one layer from the one that failed, and record the result in `sites.json`.
+- Before saying "it does not exist" or publishing a price table built from searches, read `references/search-doctrine.md` first.
