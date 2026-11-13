@@ -1,5 +1,9 @@
 # web-unlock
 
+[![CI](https://github.com/lucas-saldanha-werneck/web-unlock/actions/workflows/test.yml/badge.svg)](https://github.com/lucas-saldanha-werneck/web-unlock/actions/workflows/test.yml)
+[![License](https://img.shields.io/github/license/lucas-saldanha-werneck/web-unlock)](LICENSE)
+[![Version](https://img.shields.io/badge/version-0.3.7-blue)](CHANGELOG.md)
+
 A Claude Code skill for the moment a normal web fetch fails: a Cloudflare challenge, a 403, a captcha, an
 authwall, an empty JavaScript shell. It gives Claude a ladder per kind of target, scripts that climb it, a
 per-site registry of what worked, and a short doctrine for searches that end in "it does not exist".
@@ -191,3 +195,7 @@ yourself if you want. `rm -rf ~/.chrome-automation-profile` removes the automati
 MIT
 
 Built with Claude Code
+
+## Security
+
+See [SECURITY.md](SECURITY.md) for what this plugin accesses and how to report a vulnerability.
