@@ -5,6 +5,7 @@ All notable changes to this plugin. Versions follow `.claude-plugin/plugin.json`
 ## 0.3.8 (2026-11-13)
 
 - Skill schema and score: version and tags in the frontmatter, third-person description, Purpose, Prerequisites, Limitations and Troubleshooting sections; skill score badge.
+- README: demo video and badges; adds SECURITY.md.
 
 ## 0.3.7 (2026-11-13)
 
@@ -16,15 +17,17 @@ All notable changes to this plugin. Versions follow `.claude-plugin/plugin.json`
 
 ## 0.3.5 (2026-11-12)
 
-- Audit fixes, round 2.
+- `fetch.sh`: a private work folder per run; curl failures and 4xx/5xx no longer count as OK; L0 honors `-o`.
+- Detector: a 4xx/5xx with `--expect-page` is not a page; `search.sh` checks `-n`.
+- `chrome-real.sh --fresh` only deletes a folder it created; uninstall checks the install marker.
 
 ## 0.3.4 (2026-11-11)
 
-- Maintenance: point to the catalog repo's new name, lucas-tools.
+- Points to the catalog repo's new name, `lucas-tools`.
 
 ## 0.3.3 (2026-11-11)
 
-- Maintenance: rename the marketplace to lucas-tools.
+- Catalog renamed to `lucas-tools`.
 
 ## 0.3.2 (2026-11-11)
 
