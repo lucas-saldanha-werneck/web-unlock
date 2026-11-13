@@ -1,9 +1,11 @@
 ---
 name: web-unlock
 description: >-
-  Second step of web access, for when a normal fetch or search failed or was not enough. Use when a page comes back blocked or empty ("Just a moment", "Verify you are human", 403/429, captcha, authwall, a JavaScript shell, r.jina.ai "Warning - Target URL returned error"), when the target is a site that needs the user's login, when a host is already listed in sites.json, when you need to drive a real Chrome, or before concluding "it does not exist" or publishing a price list or search-based table. Also when the user says "the site blocked it", "log into my account on X", "force the read", "use the real Chrome". Not the first step: plain page reads and searches start with your normal tools (WebFetch, WebSearch, curl).
+  Second step of web access, for when a normal fetch or search failed or was not enough. Use when a page comes back blocked or empty ("Just a moment", "Verify you are human", 403/429, captcha, authwall, a JavaScript shell, r.jina.ai "Warning - Target URL returned error"), when the target is a site that needs the user's login, when a host is already listed in sites.json, when a real Chrome must be driven, or before concluding "it does not exist" or publishing a price list or search-based table. Also when the user says "the site blocked it", "log into the account on X", "force the read", "use the real Chrome". Not the first step: plain page reads and searches start with the normal tools (WebFetch, WebSearch, curl).
+version: "0.3.8"
 metadata:
   author: Lucas Saldanha Werneck <lucas@2olhares.com>
+  tags: [web, scraping, anti-bot, browser]
 ---
 
 # web-unlock: what to do when the normal fetch does not get through
@@ -23,6 +25,9 @@ follow its message; it names the next layer.
 Paths below are relative to this skill's base directory (the folder that holds this SKILL.md): `bin/`,
 `lib/detect.mjs`, `sites.json`, `references/`. Every key and every external tool is optional; each script says
 what it skipped.
+
+## Purpose
+Get through a page or search that the normal tools could not read (a block, a captcha, an authwall, an empty JavaScript shell, a logged-in site), one layer at a time, and record what worked per site.
 
 ## Instructions
 1. Run `bin/user-config.sh` and read the user's rules files; they win over this file.
@@ -130,6 +135,20 @@ A new route worked or failed -> update the user's `sites.json` (host, tags, rout
 Without that the next session rediscovers it. Write to the `sites.json` in the user's folder (run
 `bin/user-config.sh --init` first if it does not exist), never to the plugin folder, which updates overwrite.
 Add or replace only that host's entry under `"hosts"`: the bundled hosts already apply.
+
+## Prerequisites
+- `bash`, `curl`, `node` 22+ and `python3`.
+- Everything else is optional (Scrapling, Firecrawl, Bright Data, search API keys, Chrome, `playwright-core`): each script checks, skips what is missing and says so. See "Optional requirements" in the README.
+
+## Limitations
+- Detection works on text patterns: an unknown block page reads as OK, and a page that quotes a block signature can read as blocked.
+- Free endpoints (r.jina.ai, the Exa MCP) rate-limit parallel calls; run them one at a time.
+- `chrome-real.sh` runs on macOS and Linux only; on Linux it was never run against a real Chrome.
+
+## Troubleshooting
+- `fetch.sh` prints `BLOCKED ... L2 unavailable`: there is no Bright Data key or zone; follow the next steps it prints, or move to the browser routes.
+- `chrome-real.sh` finds no browser: it prints where it looked; set `CHROME_REAL_APP`.
+- `cdp.mjs` exits with code 3: `playwright-core` is missing; it prints the install hint.
 
 ## Examples
 - A plain fetch of a product page returns "Just a moment...". Run `bin/fetch.sh <url>`; it prints one line, `OK <layer> <file> <bytes>` or `BLOCKED <layer> <reason>`, and the body goes to the file, not the terminal.

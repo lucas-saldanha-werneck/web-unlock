@@ -2,7 +2,8 @@
 
 [![CI](https://github.com/lucas-saldanha-werneck/web-unlock/actions/workflows/test.yml/badge.svg)](https://github.com/lucas-saldanha-werneck/web-unlock/actions/workflows/test.yml)
 [![License](https://img.shields.io/github/license/lucas-saldanha-werneck/web-unlock)](LICENSE)
-[![Version](https://img.shields.io/badge/version-0.3.7-blue)](CHANGELOG.md)
+[![Version](https://img.shields.io/badge/version-0.3.8-blue)](CHANGELOG.md)
+[![web-unlock score](https://img.shields.io/badge/skill%20score-98.8%20A-brightgreen)](https://github.com/NVIDIA/SkillEvaluator)
 
 A Claude Code skill for the moment a normal web fetch fails: a Cloudflare challenge, a 403, a captcha, an
 authwall, an empty JavaScript shell. It gives Claude a ladder per kind of target, scripts that climb it, a
