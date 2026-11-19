@@ -2,6 +2,10 @@
 
 All notable changes to this plugin. Versions follow `.claude-plugin/plugin.json`.
 
+## 0.3.9 (2026-11-19)
+
+- Security: API keys (Exa, Serper, Jina, Bright Data) are passed to curl on stdin (`--config -`) instead of `-H` arguments, so they no longer show in the process list.
+
 ## 0.3.8 (2026-11-13)
 
 - Skill schema and score: version and tags in the frontmatter, third-person description, Purpose, Prerequisites, Limitations and Troubleshooting sections; skill score badge.
