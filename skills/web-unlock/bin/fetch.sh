@@ -81,7 +81,8 @@ if ge L1 "$START" && ge "$STOP" L1; then
     [ "$ocrc" -eq 2 ] && REASON="BLOCKED:oc-no-readable-text (JavaScript-only page, challenge or wall)"
   fi
   LAST=L1-jina; f="$WORK/L1.jina.md"; rm -f "$f"
-  curl -s --max-time 60 -o "$f" -H "Accept: text/markdown" ${JINA_API_KEY:+-H "Authorization: Bearer $JINA_API_KEY"} "https://r.jina.ai/$URL" 2>/dev/null; crc=$?
+  # API keys go to curl via stdin (--config -), never on the command line (visible in ps).
+  { [ -n "${JINA_API_KEY:-}" ] && printf 'header = "Authorization: Bearer %s"\n' "$JINA_API_KEY"; :; } | curl -s --config - --max-time 60 -o "$f" -H "Accept: text/markdown" "https://r.jina.ai/$URL" 2>/dev/null; crc=${PIPESTATUS[1]:-$?}
   if [ $crc -eq 0 ] && [ -s "$f" ] && check "$f"; then deliver "$f" "$OUT"; echo "OK L1-jina $OUT $(size "$f")"; exit 0; fi
   if command -v scrapling >/dev/null && [ "${WEB_UNLOCK_NO_SCRAPLING:-0}" != 1 ]; then
     LAST=L1-scrapling; f="$WORK/L1.scrapling.md"; rm -f "$f"
@@ -106,8 +107,8 @@ if ge L2 "$START" && ge "$STOP" L2; then
     LAST=L2-brightdata; f="$WORK/L2.bd.md"; rm -f "$f"
     # Built by node so quotes or backslashes in the URL or zone cannot break the JSON.
     BODY=$(node -e 'console.log(JSON.stringify({zone:process.argv[1],url:process.argv[2],format:"raw",data_format:"markdown"}))' "$BRIGHTDATA_UNLOCKER_ZONE" "$URL")
-    curl -s --max-time 90 -o "$f" -X POST "https://api.brightdata.com/request" \
-      -H "Authorization: Bearer $BRIGHTDATA_API_KEY" -H "Content-Type: application/json" \
+    printf 'header = "Authorization: Bearer %s"\n' "$BRIGHTDATA_API_KEY" | curl -s --config - --max-time 90 -o "$f" -X POST "https://api.brightdata.com/request" \
+      -H "Content-Type: application/json" \
       -d "$BODY" 2>/dev/null; crc=$?
     if [ $crc -eq 0 ] && [ -s "$f" ] && check "$f"; then deliver "$f" "$OUT"; echo "OK L2-brightdata $OUT $(size "$f")"; exit 0; fi
   else

@@ -71,12 +71,13 @@ for t, u, s in rows:
 sys.exit(0 if n else 1)' "$1" "$2"; }
 try_exa_mcp() { command -v mcporter >/dev/null || return 1
   mcporter call exa.web_search_exa query="$Q" numResults="$N" --output json > "$F" 2>/dev/null && norm exa-mcp "$F"; }
+# API keys go to curl via stdin (--config -), never on the command line (visible in ps).
 try_exa() { [ -n "${EXA_API_KEY:-}" ] || return 1
-  curl -s --max-time 30 -o "$F" -X POST https://api.exa.ai/search -H "x-api-key: $EXA_API_KEY" -H "Content-Type: application/json" \
+  printf 'header = "x-api-key: %s"\n' "$EXA_API_KEY" | curl -s --config - --max-time 30 -o "$F" -X POST https://api.exa.ai/search -H "Content-Type: application/json" \
     -d "{\"query\":$(jstr "$Q"),\"numResults\":$N,\"type\":\"auto\",\"contents\":{\"highlights\":true}}" && norm exa "$F"; }
 try_serper() { [ -n "${SERPER_API_KEY:-}" ] || return 1
   local extra=""; [ -n "$GL" ] && extra="$extra,\"gl\":$(jstr "$GL")"; [ -n "$HL" ] && extra="$extra,\"hl\":$(jstr "$HL")"
-  curl -s --max-time 30 -o "$F" -X POST https://google.serper.dev/search -H "X-API-KEY: $SERPER_API_KEY" -H "Content-Type: application/json" \
+  printf 'header = "X-API-KEY: %s"\n' "$SERPER_API_KEY" | curl -s --config - --max-time 30 -o "$F" -X POST https://google.serper.dev/search -H "Content-Type: application/json" \
     -d "{\"q\":$(jstr "$Q"),\"num\":$N$extra}" && norm serper "$F"; }
 try_tavily() { command -v tvly >/dev/null || return 1
   tvly search "$Q" --max-results "$N" --json > "$F" 2>/dev/null && norm tavily "$F"; }
